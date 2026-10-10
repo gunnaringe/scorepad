@@ -1,12 +1,12 @@
 // Poengblokka / Scorepad UI. Plain DOM, hash routing, no framework.
 //
 // Routes:  #/                 home
-//          #/s/:sid           session (its games)
-//          #/s/:sid/new       new game (?from=:gid prefills)
+//          #/s/:sid           session (a game night: its games)
+//          #/s/:sid/new       new game (?from=:gid prefills, "play again")
 //          #/s/:sid/g/:gid    game table
 //          #/s/:sid/g/:gid/edit  change name and rules
-//          #/s/:sid/dash      dashboard, follows the active game
-//          #/s/:sid/g/:gid/dash  dashboard pinned to one game
+//          #/s/:sid/dash      big screen, follows the active game
+//          #/s/:sid/g/:gid/dash  big screen pinned to one game
 // Shared links are /s/CODE (served index.html by the SPA fallback) and are
 // turned into a local session record, then a hash route.
 
@@ -24,7 +24,7 @@ let live = null;
 let route = { name: 'home' };
 let draft = null; // new-game form
 let form = null; // round sheet
-let prevTotals = {}; // dashboard bump animation
+let prevTotals = {}; // big screen bump animation
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
@@ -57,14 +57,14 @@ function applyI18n(root = document) {
 }
 
 const fmt = (n) => (n < 0 ? `−${-n}` : String(n));
-const signed = (n) => (n > 0 ? `+${n}` : fmt(n));
+const signed = (n) => (n > 0 ? `+${n}` : n === 0 ? '±0' : fmt(n));
 
 function dateLabel(ms) {
-  const d = new Date(ms);
-  const s = new Intl.DateTimeFormat(locale(), { weekday: 'long', day: 'numeric', month: 'long' }).format(d);
+  const s = new Intl.DateTimeFormat(locale(), { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date(ms));
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 const timeLabel = (ms) => new Intl.DateTimeFormat(locale(), { hour: '2-digit', minute: '2-digit' }).format(new Date(ms));
+const sameDay = (a, b) => new Date(a).toDateString() === new Date(b).toDateString();
 
 // --- Helpers -------------------------------------------------------------------
 
@@ -73,6 +73,7 @@ const pname = (pid) => state()?.players[pid]?.name ?? '?';
 const names = (pids) => pids.map(pname).join(', ');
 const gameName = (g) => g.name || t('game.untitled');
 const entryOf = (g) => rulesOf(g).entry;
+const pressed = (on) => `aria-pressed="${on ? 'true' : 'false'}"`;
 
 function go(hash) {
   if (location.hash === hash) render();
@@ -88,7 +89,7 @@ function toast(msg, action) {
   el.hidden = false;
   if (action) $('button', el).onclick = () => { el.hidden = true; action.run(); };
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { el.hidden = true; }, action ? 6000 : 3000);
+  toastTimer = setTimeout(() => { el.hidden = true; }, action ? 8000 : 3500);
 }
 
 function qrSvg(text) {
@@ -104,10 +105,12 @@ function qrSvg(text) {
 
 const shareUrl = (code) => `${location.origin}/s/${code}`;
 
+// The share code in a bar. Lives in a .chip-slot, so sharing later fills it.
 function statusChip() {
   if (!live?.shared) return '';
   return `<button type="button" class="status-chip status-${live.status}" data-act="share" title="${tt(`status.${live.status}`)}"><span class="dot"></span>${esc(live.rec.code)}</button>`;
 }
+const chipSlot = () => `<span class="chip-slot">${statusChip()}</span>`;
 
 // --- Theme, wake lock --------------------------------------------------------------
 
@@ -167,7 +170,8 @@ function onLive(what) {
     else if (route.name === 'dash') renderDash();
     else if (route.name === 'session') renderSession();
   }
-  for (const el of $$('.status-chip')) el.outerHTML = statusChip();
+  if (what === 'state' && form && sheet.open) checkStale();
+  for (const el of $$('.chip-slot')) el.innerHTML = statusChip();
   if (dlg.open && dlg.dataset.kind === 'settings') refreshConnection();
   if (dlg.open && dlg.dataset.kind === 'share' && what !== 'devices') renderShare();
 }
@@ -182,7 +186,7 @@ function render() {
   }
   if (route.name !== 'new') draft = null;
   view.onclick = view.onchange = null;
-  if (sheet.open && (prev.gid !== route.gid || route.name !== 'game')) sheet.close();
+  if (sheet.open && (prev.gid !== route.gid || route.name !== 'game')) closeSheet();
   document.body.dataset.view = route.name;
   if ((route.name === 'game' && !state().games[route.gid]) || (route.edit && !state().games[route.edit])) return go(`#/s/${route.sid}`);
   ({ home: renderHome, session: renderSession, new: renderNew, game: renderGame, dash: renderDash })[route.name]();
@@ -207,14 +211,24 @@ document.addEventListener('click', (e) => {
 
 // --- Home ----------------------------------------------------------------------
 
-function sessionSummary(rec) {
-  const s = (live?.rec.id === rec.id ? live.state : null) ?? reduceRec(rec);
-  const games = s.gameOrder.length;
-  const players = s.playerOrder.slice(0, 6).map((pid) => s.players[pid].name);
-  return { games, players };
+const reduceRec = (rec) => (live?.rec.id === rec.id ? live.state : reduce([...rec.events, ...rec.pending]));
+
+// The game to jump back into: the most recently touched unfinished one.
+function resumeGame(s) {
+  return s.gameOrder.map((id) => s.games[id])
+    .filter((g) => !summarize(g).done)
+    .sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0))[0] ?? null;
 }
 
-const reduceRec = (rec) => reduce([...rec.events, ...rec.pending]);
+// Tonight's session, which "Nytt spill" continues: shared, or from today.
+function tonight(rec) {
+  return rec && ((rec.code && !rec.expired) || sameDay(rec.updatedAt, Date.now()));
+}
+
+function progressLabel(sum) {
+  if (sum.done) return tt('game.finished', { n: sum.completed });
+  return sum.totalRounds ? tt('game.roundOf', { n: sum.current + 1, of: sum.totalRounds }) : tt('game.round', { n: sum.current + 1 });
+}
 
 function renderHome() {
   // "New game" makes a record up front; drop the ones abandoned before a game
@@ -225,12 +239,17 @@ function renderHome() {
   const sessions = store.listSessions();
   const [latest, ...older] = sessions;
   const item = (rec, cls = '') => {
-    const { games, players } = sessionSummary(rec);
-    return `<a class="card session-card ${cls}" href="#/s/${rec.id}">
+    const s = reduceRec(rec);
+    const players = s.playerOrder.slice(0, 6).map((pid) => s.players[pid].name);
+    const g = resumeGame(s);
+    const href = g ? `#/s/${rec.id}/g/${g.id}` : `#/s/${rec.id}`;
+    return `<a class="card session-card ${cls}" href="${href}">
       <span class="session-date">${esc(dateLabel(rec.createdAt))}${rec.code && !rec.expired ? ` <span class="badge">${tt('session.shared')}</span>` : ''}</span>
-      <span class="session-meta">${tt(games === 1 ? 'session.game' : 'session.games', { n: games })}${players.length ? ` · ${esc(players.join(', '))}` : ''}</span>
+      ${g ? `<span class="session-game">${esc(gameName(g))} · ${progressLabel(summarize(g))}</span>` : ''}
+      <span class="session-meta">${tt(s.gameOrder.length === 1 ? 'session.game' : 'session.games', { n: s.gameOrder.length })}${players.length ? ` · ${esc(players.join(', '))}` : ''}</span>
     </a>`;
   };
+  const cont = tonight(latest);
   view.innerHTML = `
     <header class="hero">
       <div class="hero-top"><span></span><button type="button" class="icon-btn" data-act="settings" data-i18n-title="settings.title">${icon('gear')}</button></div>
@@ -239,34 +258,46 @@ function renderHome() {
     </header>
     <main class="page">
       <div class="stack">
-        <button type="button" class="btn primary big" id="new-session">${icon('plus')}${tt('home.new')}</button>
+        <div class="stack tight">
+          <button type="button" class="btn primary big" id="new-game">${icon('plus')}${tt('home.new')}</button>
+          ${cont ? `<button type="button" class="link" id="new-night">${tt('home.newNight')}</button>` : ''}
+        </div>
         ${latest ? `<section><h2>${tt('home.continue')}</h2>${item(latest, 'latest')}</section>` : ''}
         <section class="card join">
-          <h2>${tt('home.join')}</h2>
+          <h2><label for="join-code">${tt('home.join')}</label></h2>
           <form id="join-form" class="row">
-            <input id="join-code" class="code-input" maxlength="7" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="K7QX4M" aria-label="${tt('home.code')}">
+            <input id="join-code" class="code-input" maxlength="7" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="K7QX4M" aria-describedby="join-error">
             <button class="btn">${tt('home.joinBtn')}</button>
           </form>
+          <p class="field-error" id="join-error" role="alert" hidden></p>
           <p class="hint">${tt('home.joinHint')}</p>
         </section>
         ${older.length ? `<section><h2>${tt('home.earlier')}</h2><div class="stack tight">${older.slice(0, 30).map((r) => item(r)).join('')}</div></section>` : ''}
       </div>
     </main>`;
   applyI18n(view);
-  $('#new-session').onclick = () => {
-    const rec = store.newSession();
-    go(`#/s/${rec.id}/new`);
-  };
+  $('#new-game').onclick = () => go(`#/s/${(cont ? latest : store.newSession()).id}/new`);
+  $('#new-night')?.addEventListener('click', () => go(`#/s/${store.newSession().id}/new`));
   $('#join-form').onsubmit = (e) => {
     e.preventDefault();
     join($('#join-code').value);
   };
+  $('#join-code').oninput = () => { $('#join-error').hidden = true; };
 }
 
-// True if it navigated to the session.
+// True if it navigated to the session. Errors go under the code field when
+// it's on screen, else in a toast.
 async function join(raw, dash = false) {
+  const fail = (key) => {
+    const el = $('#join-error');
+    if (el) {
+      el.textContent = t(key);
+      el.hidden = false;
+    } else toast(t(key));
+    return false;
+  };
   const code = String(raw).toUpperCase().replace(/[^A-Z0-9]/g, '');
-  if (code.length !== 6) return toast(t('join.bad')), false;
+  if (code.length !== 6) return fail('join.bad');
   const target = (rec) => `#/s/${rec.id}${dash ? '/dash' : ''}`;
   const existing = store.findByCode(code);
   if (existing) return go(target(existing)), true;
@@ -274,9 +305,9 @@ async function join(raw, dash = false) {
   try {
     ok = await store.sessionExists(code);
   } catch {
-    return toast(t('join.offline')), false;
+    return fail('join.offline');
   }
-  if (!ok) return toast(t('join.missing')), false;
+  if (!ok) return fail('join.missing');
   go(target(store.newSession({ code })));
   return true;
 }
@@ -293,9 +324,8 @@ function renderSession() {
         ? `🏆 ${tt('game.won', { names: names(sum.winners) })}`
         : tt('game.leads', { names: names(sum.leaders), score: fmt(sum.totals[sum.leaders[0]]) })
       : tt('game.notStarted');
-    const progress = sum.totalRounds ? tt('game.roundOf', { n: Math.min(sum.completed, sum.totalRounds), of: sum.totalRounds }) : tt('game.rounds', { n: sum.completed });
     return `<a class="card game-card${sum.done ? ' done' : ''}" href="#/s/${route.sid}/g/${g.id}">
-      <span class="game-card-top"><strong>${esc(gameName(g))}</strong><span class="muted">${progress}</span></span>
+      <span class="game-card-top"><strong>${esc(gameName(g))}</strong><span class="muted">${progressLabel(sum)}</span></span>
       <span class="game-card-players">${esc(names(g.players))}</span>
       <span class="game-card-lead">${lead}</span>
     </a>`;
@@ -304,16 +334,16 @@ function renderSession() {
     <header class="bar">
       <a class="icon-btn" href="#/" data-i18n-title="nav.home">${icon('back')}</a>
       <h1>${esc(dateLabel(live.rec.createdAt))}</h1>
-      ${statusChip()}
+      ${chipSlot()}
       <button type="button" class="icon-btn" data-act="settings" data-i18n-title="settings.title">${icon('gear')}</button>
     </header>
     <main class="page">
       <div class="stack">
         ${live.rec.expired ? `<p class="notice">${tt('session.expired')}</p>` : ''}
-        <div class="row wrap">
-          <a class="btn primary" href="#/s/${route.sid}/new">${icon('plus')}${tt('session.newGame')}</a>
-          <button type="button" class="btn" data-act="share">${icon('qr')}${tt('session.share')}</button>
-          <a class="btn" href="#/s/${route.sid}/dash">${icon('tv')}${tt('session.dashboard')}</a>
+        <div class="tiles">
+          <a class="btn primary tile" href="#/s/${route.sid}/new">${icon('plus')}<span>${tt('session.newGame')}</span></a>
+          <button type="button" class="btn tile" data-act="share">${icon('qr')}<span>${tt('session.share')}</span></button>
+          <a class="btn tile" href="#/s/${route.sid}/dash">${icon('tv')}<span>${tt('session.dashboard')}</span></a>
         </div>
         ${games.length ? `<div class="stack tight">${games.map(card).join('')}</div>` : `<p class="empty">${tt('session.empty')}</p>`}
         <button type="button" class="link danger" id="delete-session">${tt('session.delete')}</button>
@@ -335,17 +365,29 @@ function renderSession() {
 // A game is a name plus rules. The presets only fill in the rules; every rule
 // can be changed, also later from the game menu (old rounds are rescored).
 
+// What an unnamed game is called: its preset, or "Own rules".
+const suggestedName = (rules) => {
+  const p = matchPreset(rules);
+  return p ? t(`preset.${p}`) : t('rules.ownName');
+};
+
+// Names the app made up (in either language) aren't carried over: an empty
+// name follows the rules when another preset is picked.
+const autoName = (name) => !name || ['no', 'en'].some((l) =>
+  [...PRESET_IDS.map((id) => I18N[l][`preset.${id}`]), I18N[l]['rules.ownName']].includes(name));
+
 function initDraft() {
   const s = state();
   if (route.edit) {
     const g = s.games[route.edit];
-    draft = { edit: g.id, name: g.name, rules: rulesOf(g), players: [], firstDealer: 0 };
+    draft = { edit: g.id, name: autoName(g.name) ? '' : g.name, rules: rulesOf(g), players: [], firstDealer: 0 };
     return;
   }
   const from = s.games[route.from] ?? s.games[s.gameOrder.at(-1)];
   if (from) {
     draft = {
-      name: from.name,
+      // "Play again" keeps a name you chose; a new game starts unnamed.
+      name: route.from && !autoName(from.name) ? from.name : '',
       rules: rulesOf(from),
       players: from.players.map((pid) => ({ pid, name: pname(pid) })),
       firstDealer: route.from ? (from.firstDealer + 1) % from.players.length : 0,
@@ -355,11 +397,9 @@ function initDraft() {
   }
 }
 
-// What an unnamed game is called: its preset, or "Own rules".
-const suggestedName = (rules) => {
-  const p = matchPreset(rules);
-  return p ? t(`preset.${p}`) : t('rules.ownName');
-};
+function hitText(r) {
+  return [r.hitBase || '', r.hitPerTrick ? `${r.hitPerTrick === 1 ? '' : `${r.hitPerTrick} × `}${t('sum.bid')}` : ''].filter(Boolean).join(' + ') || '0';
+}
 
 // The rules in plain words, one line per rule that matters.
 function rulesSummary(r) {
@@ -369,8 +409,7 @@ function rulesSummary(r) {
     lines.push(t(`sum.cards.${r.cards}`, { max: r.maxCards, n: rounds }));
   }
   if (r.entry === 'bids') {
-    const hit = [r.hitBase || '', r.hitPerTrick ? `${r.hitPerTrick === 1 ? '' : `${r.hitPerTrick} × `}${t('sum.bid')}` : ''].filter(Boolean).join(' + ') || '0';
-    lines.push(t('sum.hit', { hit }));
+    lines.push(t('sum.hit', { hit: hitText(r) }));
     lines.push(r.missPerTrick ? t('sum.missPer', { n: r.missPerTrick }) : t('sum.miss0'));
     if (r.trickPoints) lines.push(t('sum.trickPoints', { n: r.trickPoints }));
   }
@@ -385,6 +424,21 @@ function rulesSummary(r) {
   if (r.target > 0) lines.push(t('sum.target', { n: r.target }));
   lines.push(t(r.lowWins ? 'sum.low' : 'sum.high'));
   return lines;
+}
+
+// The same, on one line: "Bud og stikk · 1→10→1 kort · treff 10 + bud · bom 0".
+function compactSummary(r) {
+  const parts = [t(`rule.entry.${r.entry}`)];
+  if (r.entry !== 'scores' && r.cards !== 'none') parts.push(t(`cs.cards.${r.cards}`, { max: r.maxCards }));
+  if (r.entry === 'bids') {
+    parts.push(t('cs.hit', { hit: hitText(r) }));
+    parts.push(r.missPerTrick ? t('cs.missPer', { n: r.missPerTrick }) : t('cs.miss0'));
+  }
+  if (r.entry === 'contract') parts.push(t(r.fail === 'zero' ? 'cs.fail0' : 'cs.failMinus'));
+  if (r.rounds > 0) parts.push(t('cs.rounds', { n: r.rounds }));
+  if (r.target > 0) parts.push(t('cs.target', { n: r.target }));
+  if (r.lowWins) parts.push(t('cs.low'));
+  return parts.join(' · ');
 }
 
 const SOURCES = {
@@ -404,8 +458,8 @@ function ruleField(key) {
     return `<label class="field-row"><span>${label}${hint}</span><input type="number" inputmode="numeric" class="num" data-rule="${key}" value="${r[key]}"></label>`;
   }
   const opts = { entry: ['scores', 'bids', 'contract'], cards: ['none', 'updown', 'downup', 'fixed', 'deck'], fail: ['minus', 'zero'] }[key];
-  return `<div class="field-col"><span>${label}</span><div class="segmented">${opts.map((o) =>
-    `<button type="button" data-rule="${key}" data-val="${o}" class="${r[key] === o ? 'on' : ''}">${tt(`rule.${key}.${o}`)}</button>`).join('')}</div></div>`;
+  return `<div class="field-col" role="group" aria-label="${label}"><span>${label}</span><div class="segmented">${opts.map((o) =>
+    `<button type="button" data-rule="${key}" data-val="${o}" class="${r[key] === o ? 'on' : ''}" ${pressed(r[key] === o)}>${tt(`rule.${key}.${o}`)}</button>`).join('')}</div></div>`;
 }
 
 function ruleFields() {
@@ -429,6 +483,10 @@ function renderNew() {
   const problem = editing ? null : playerProblem(r, n);
   const chips = editing ? [] : candidates().slice(0, 14);
   const back = editing ? `#/s/${route.sid}/g/${draft.edit}` : `#/s/${route.sid}`;
+  const nameSection = `<section>
+    <h2><label for="gname">${tt('new.nameOptional')}</label></h2>
+    <input id="gname" class="text-input" maxlength="40" autocomplete="off" value="${esc(draft.name)}" placeholder="${esc(suggestedName(r))}">
+  </section>`;
   view.innerHTML = `
     <header class="bar">
       <a class="icon-btn" href="${back}" data-i18n-title="nav.back">${icon('back')}</a>
@@ -437,11 +495,7 @@ function renderNew() {
     </header>
     <main class="page">
       <div class="stack">
-        <section>
-          <h2>${tt('new.name')}</h2>
-          <input id="gname" class="text-input" maxlength="40" autocomplete="off" value="${esc(draft.name)}" placeholder="${esc(suggestedName(r))}">
-        </section>
-
+        ${editing ? nameSection : ''}
         <section>
           <h2>${tt('new.rules')}</h2>
           <div class="presets" role="radiogroup" aria-label="${tt('new.presets')}">
@@ -449,10 +503,11 @@ function renderNew() {
             ${preset ? '' : `<span class="preset own on" role="radio" aria-checked="true">${tt('rules.own')}</span>`}
           </div>
           <div class="card rules-card">
-            <ul class="rules-summary">${rulesSummary(r).map((l) => `<li>${esc(l)}</li>`).join('')}</ul>
-            ${SOURCES[preset] ? `<p class="small muted">${SOURCES[preset]}</p>` : ''}
+            <p class="rules-compact">${esc(compactSummary(r))}</p>
             <details class="rules-editor"${draft.open ? ' open' : ''}>
               <summary>${tt('new.customize')}</summary>
+              <ul class="rules-summary">${rulesSummary(r).map((l) => `<li>${esc(l)}</li>`).join('')}</ul>
+              ${SOURCES[preset] ? `<p class="small muted">${SOURCES[preset]}</p>` : ''}
               ${ruleFields()}
             </details>
           </div>
@@ -460,25 +515,27 @@ function renderNew() {
 
         ${editing ? `<p class="hint">${tt('new.editHint')}</p>` : `<section>
           <h2>${tt('new.playersTitle')} <span class="muted">${n}</span></h2>
+          <p class="hint seat-hint">${tt('new.seatHint')}</p>
           ${n ? `<ol class="seats">${draft.players.map((pl, i) => `
             <li>
               <span class="seat-no">${i + 1}</span>
               <span class="seat-name">${esc(pl.name)}</span>
-              <button type="button" class="dealer-btn${i === draft.firstDealer ? ' on' : ''}" data-dealer="${i}" title="${tt('new.dealsFirst')}">${i === draft.firstDealer ? tt('new.dealer') : icon('cards')}</button>
+              <button type="button" class="dealer-btn${i === draft.firstDealer ? ' on' : ''}" data-dealer="${i}" ${pressed(i === draft.firstDealer)} title="${tt('new.dealsFirst')}">${tt('new.dealer')}</button>
               <button type="button" class="icon-btn small" data-move="${i}" data-dir="-1" ${i === 0 ? 'disabled' : ''} data-i18n-title="new.up">${icon('up')}</button>
               <button type="button" class="icon-btn small" data-move="${i}" data-dir="1" ${i === n - 1 ? 'disabled' : ''} data-i18n-title="new.down">${icon('down')}</button>
               <button type="button" class="icon-btn small" data-remove="${i}" data-i18n-title="new.remove">${icon('x')}</button>
             </li>`).join('')}</ol>` : ''}
           <form class="add-player" id="add-form" autocomplete="off">
             <div class="combo">
-              <input id="pname" enterkeyhint="done" maxlength="40" placeholder="${tt('new.addPlaceholder')}" aria-autocomplete="list" aria-controls="suggest" autocapitalize="words">
+              <input id="pname" enterkeyhint="done" maxlength="40" placeholder="${tt('new.addPlaceholder')}" aria-label="${tt('new.addPlaceholder')}" aria-autocomplete="list" aria-controls="suggest" autocapitalize="words">
               <ul id="suggest" class="suggest" role="listbox" hidden></ul>
             </div>
             <button class="btn" aria-label="${tt('new.add')}">${icon('plus')}</button>
           </form>
           ${chips.length ? `<div class="chips">${chips.map((c) => `<button type="button" class="chip" data-add="${esc(c)}">+ ${esc(c)}</button>`).join('')}</div>` : ''}
           ${problem && n ? `<p class="hint warn">${tt(problem.key, problem)}</p>` : ''}
-        </section>`}
+        </section>
+        ${nameSection}`}
       </div>
     </main>
     <footer class="action-bar">
@@ -638,11 +695,10 @@ function cellHtml(game, row, pid) {
   const r = row.round;
   let sub = '';
   if (r.contract) {
-    if (r.contract.kurtier === pid) sub = `<span class="role">${tt('am.k')} ${r.contract.bid}</span>`;
-    else if (r.contract.partner === pid) sub = `<span class="role">${tt('am.p')}</span>`;
-    else if (r.tricks) sub = '';
+    if (r.contract.kurtier === pid) sub = `<span class="role">${tt('am.kurtier')} ${r.contract.bid}</span>`;
+    else if (r.contract.partner === pid) sub = `<span class="role">${tt('am.partner')}</span>`;
   } else if (r.bids && pid in r.bids) {
-    sub = r.tricks ? `${r.bids[pid]}/${r.tricks[pid] ?? 0}` : `${tt('table.bid')} ${r.bids[pid]}`;
+    sub = r.tricks ? `${r.bids[pid]}/${r.tricks[pid] ?? 0}${r.bids[pid] === r.tricks[pid] ? ' ✓' : ''}` : `${tt('table.bid')} ${r.bids[pid]}`;
   }
   if (!row.scores) return `<td class="pending"><span class="sub">${sub || '·'}</span></td>`;
   const v = row.scores[pid] ?? 0;
@@ -655,17 +711,24 @@ function tableHtml(game, sum, { interactive = true } = {}) {
   const lead = new Set(sum.completed ? sum.leaders : []);
   const head = game.players.map((pid) => `<th scope="col" class="${lead.has(pid) ? 'lead' : ''}${sum.dealer === pid && !sum.done ? ' dealer' : ''}">
     <span class="pn">${esc(pname(pid))}</span>${sum.dealer === pid && !sum.done ? `<span class="deal-mark" title="${tt('game.dealer')}">${icon('cards')}</span>` : ''}</th>`).join('');
-  const rows = sum.rows.map((row) => `<tr${interactive ? ` data-rid="${esc(row.round.id)}" tabindex="0"` : ''} class="${row.scores ? '' : 'pending-row'}">
-    <th scope="row" class="rn">${row.index + 1}${row.cards != null && entryOf(game) === 'bids' ? `<small>${row.cards}</small>` : ''}</th>
-    ${game.players.map((pid) => cellHtml(game, row, pid)).join('')}</tr>`).join('');
+  const rows = sum.rows.map((row) => {
+    const title = row.cards != null ? `${t('game.round', { n: row.index + 1 })} · ${t('game.cards', { n: row.cards })}` : t('game.round', { n: row.index + 1 });
+    return `<tr${interactive ? ` data-rid="${esc(row.round.id)}" tabindex="0" aria-label="${tt('table.editRow', { n: row.index + 1 })}"` : ''} class="${row.scores ? '' : 'pending-row'}">
+      <th scope="row" class="rn" title="${esc(title)}">${row.index + 1}</th>
+      ${game.players.map((pid) => cellHtml(game, row, pid)).join('')}</tr>`;
+  }).join('');
   const foot = game.players.map((pid) => `<td class="${lead.has(pid) ? 'lead' : ''}">
     <span class="v">${fmt(sum.totals[pid])}</span>${sum.completed ? `<span class="rank r${sum.ranks[pid]}">${sum.ranks[pid]}</span>` : ''}</td>`).join('');
+  const cols = game.players.length + 1;
   return `<table class="score">
     <thead><tr><th class="corner" scope="col">#</th>${head}</tr></thead>
-    <tbody>${rows || `<tr class="empty-row"><td colspan="${game.players.length + 1}">${tt('table.empty')}</td></tr>`}</tbody>
+    <tbody>${rows || `<tr class="empty-row"><td colspan="${cols}">${tt('table.empty')}</td></tr>`}
+      <tr class="filler" aria-hidden="true"><td colspan="${cols}"></td></tr></tbody>
     <tfoot><tr><th scope="row" class="corner">Σ</th>${foot}</tr></tfoot>
   </table>`;
 }
+
+const EDIT_HINT = 'scorepad-hint-edit-v1';
 
 function infoHtml(game, sum) {
   if (sum.done) {
@@ -677,19 +740,31 @@ function infoHtml(game, sum) {
   if (sum.dealer) parts.push(`${tt('game.dealer')}: <strong>${esc(pname(sum.dealer))}</strong>`);
   let extra = '';
   const r = sum.pending;
+  const target = rulesOf(game).target;
   if (r?.bids) {
-    const bal = bidBalance(game, r.bids, sum.current);
-    if (bal != null) extra = balanceHtml(bal, game, r.bids);
+    extra = bidsLine(game, r.bids, sum.current);
   } else if (r?.contract) {
     const c = r.contract;
     extra = tt('am.contractLine', { k: pname(c.kurtier), bid: c.bid, p: c.partner ? pname(c.partner) : t('am.alone') });
+  } else if (sum.completed && !localStorage.getItem(EDIT_HINT)) {
+    extra = tt('game.editHint');
+  } else if (sum.completed) {
+    const leader = sum.sorted[0];
+    extra = target > 0
+      ? tt('game.leadsTarget', { names: names(sum.leaders), score: fmt(sum.totals[leader]), left: Math.max(0, target - sum.totals[leader]), target })
+      : tt('game.leads', { names: names(sum.leaders), score: fmt(sum.totals[leader]) });
   }
   return `<div class="info-line">${parts.join(' · ')}</div>${extra ? `<div class="info-line sub">${extra}</div>` : ''}`;
 }
 
-function balanceHtml(bal, game, bids) {
+// Bids so far: "3 av 5 har meldt" until everyone has, then the balance.
+function bidsLine(game, bids, index) {
+  const n = game.players.filter((pid) => Number.isInteger(bids?.[pid])).length;
+  if (n < game.players.length) return tt('bids.progress', { n, of: game.players.length });
+  const bal = bidBalance(game, bids, index);
   let sum = 0;
-  for (const pid of game.players) sum += bids?.[pid] ?? 0;
+  for (const pid of game.players) sum += bids[pid];
+  if (bal == null) return tt('bids.sum', { n: sum });
   const word = bal > 0 ? tt('bids.over', { n: bal }) : bal < 0 ? tt('bids.under', { n: -bal }) : tt('bids.even');
   return `${tt('bids.sum', { n: sum })} · <span class="bal ${bal === 0 ? 'even' : bal > 0 ? 'over' : 'under'}">${word}</span>`;
 }
@@ -709,26 +784,37 @@ function renderGame() {
     <header class="bar">
       <a class="icon-btn" href="#/s/${route.sid}" data-i18n-title="nav.back">${icon('back')}</a>
       <h1>${esc(gameName(game))}</h1>
-      ${statusChip()}
+      ${chipSlot()}
       <button type="button" class="icon-btn" id="game-menu" data-i18n-title="game.menu">${icon('dots')}</button>
     </header>
     <div class="game-info" id="gi"></div>
-    <div class="table-scroll" id="gt"></div>
+    <div class="table-wrap" id="tw"><div class="table-scroll" id="gt"></div></div>
     <footer class="action-bar" id="ga"></footer>`;
   applyI18n(view);
   $('#game-menu').onclick = openGameMenu;
-  $('#gt').onclick = (e) => {
+  const gt = $('#gt');
+  gt.onclick = (e) => {
     const tr = e.target.closest('tr[data-rid]');
     if (tr) openRound('edit', tr.dataset.rid);
   };
-  $('#gt').onkeydown = (e) => {
+  gt.onkeydown = (e) => {
     const tr = e.target.closest('tr[data-rid]');
     if (tr && (e.key === 'Enter' || e.key === ' ')) {
       e.preventDefault();
       openRound('edit', tr.dataset.rid);
     }
   };
+  gt.onscroll = edgeFade;
   updateGame(true);
+  // A round left half-entered (closed by accident, or a reload) comes back.
+  const saved = loadSheetDraft();
+  if (saved?.gid === game.id && saved.sid === route.sid) openRound(saved.req, saved.editing ? saved.rid : undefined);
+}
+
+// Hints that more players are off to the right.
+function edgeFade() {
+  const sc = $('#gt');
+  if (sc) $('#tw').classList.toggle('more-right', sc.scrollLeft + sc.clientWidth < sc.scrollWidth - 4);
 }
 
 function updateGame(first = false) {
@@ -741,11 +827,12 @@ function updateGame(first = false) {
   scroller.innerHTML = tableHtml(game, sum);
   // Follow new rounds, like a pad filling up.
   if (first || atBottom) scroller.scrollTop = scroller.scrollHeight;
+  edgeFade();
   const act = primaryAction(game, sum);
   $('#ga').innerHTML = `
     ${game.rounds.length && !game.ended ? `<button type="button" class="btn" id="undo">${icon('undo')}${tt('act.undo')}</button>` : ''}
     ${act ? `<button type="button" class="btn primary big grow" id="primary">${esc(act.label)}</button>` : ''}
-    ${sum.done ? `<a class="btn primary grow" href="#/s/${route.sid}/new?from=${game.id}">${tt('act.again')}</a>` : ''}`;
+    ${sum.done ? `<a class="btn primary big grow" href="#/s/${route.sid}/new?from=${game.id}">${tt('act.again')}</a>` : ''}`;
   if (act) $('#primary').onclick = () => openRound(act.mode);
   $('#undo')?.addEventListener('click', undo);
 }
@@ -766,160 +853,294 @@ function undo() {
 }
 
 // --- Round sheet -------------------------------------------------------------------
+//
+// One form for every kind of round. form.mode says what's entered: scores,
+// bids, tricks, contract, atricks (contract tricks), or bids+tricks /
+// contract+atricks with tabs. What you've typed is kept as a draft in
+// localStorage until it's saved or discarded, so a stray tap, the back
+// button or a reload can't lose it.
 
-function openRound(mode, rid) {
+const SHEET_DRAFT = 'scorepad-sheet-v1';
+const loadSheetDraft = () => {
+  try {
+    return JSON.parse(localStorage.getItem(SHEET_DRAFT));
+  } catch {
+    return null;
+  }
+};
+const clearSheetDraft = () => localStorage.removeItem(SHEET_DRAFT);
+function saveSheetDraft() {
+  if (!form?.dirty) return;
+  const { req, gid, rid, index, editing, mode, tab, scores, bids, tricks, contract, raw } = form;
+  try {
+    localStorage.setItem(SHEET_DRAFT, JSON.stringify({ sid: route.sid, req, gid, rid, index, editing, mode, tab, scores, bids, tricks, contract, raw }));
+  } catch {
+    // Storage full: the sheet still works, it just won't survive a reload.
+  }
+}
+
+// Identifies what the sheet was opened on, to notice changes from elsewhere.
+function sheetSig(game, rid) {
+  return JSON.stringify([game.rounds.length, game.rounds.find((r) => r.id === rid) ?? null]);
+}
+
+function openRound(req, rid) {
   const game = state().games[route.gid];
+  if (!game) return;
   const sum = summarize(game);
+  let mode = req;
   let round = rid ? game.rounds.find((r) => r.id === rid) : mode === 'scores' || mode === 'bids' || mode === 'contract' ? null : sum.pending;
   if (rid && !round) return;
+  if (!rid && (mode === 'tricks' || mode === 'atricks') && !round) return;
   const index = round ? game.rounds.indexOf(round) : game.rounds.length;
+  const complete = round ? !!scoreRound(game, round) : false;
   if (mode === 'edit') {
-    const complete = !!scoreRound(game, round);
+    localStorage.setItem(EDIT_HINT, '1');
     mode = entryOf(game) === 'scores' ? 'scores'
       : entryOf(game) === 'contract' ? complete ? 'contract+atricks' : 'contract'
         : complete ? 'bids+tricks' : 'bids';
   }
   form = {
-    mode, gid: game.id, index, editing: !!rid,
+    req, mode, gid: game.id, index, editing: !!rid,
     rid: round?.id ?? newId(),
+    tab: mode.includes('+') ? 'second' : null,
     scores: { ...round?.scores },
     bids: { ...round?.bids },
     tricks: { ...round?.tricks },
     contract: round?.contract ? { ...round.contract } : { kurtier: null, partner: undefined, bid: null },
+    raw: {}, // Fritt: text as typed, to keep invalid input visible
+    touched: {},
+    dirty: false,
+    tried: false,
+    sig: sheetSig(game, round?.id),
   };
+  const saved = loadSheetDraft();
+  if (saved && saved.gid === game.id && saved.req === req && (rid ? saved.rid === rid : !saved.editing && saved.index === index)) {
+    Object.assign(form, { mode: saved.mode, tab: saved.tab, scores: saved.scores, bids: saved.bids, tricks: saved.tricks, contract: saved.contract, raw: saved.raw ?? {}, dirty: true });
+    if (!rid) form.rid = round?.id ?? saved.rid;
+  } else if (saved && saved.gid === game.id) {
+    clearSheetDraft();
+  }
+  // Most players make their bid: start the tricks from the bids, so only the
+  // misses need a tap.
+  if (form.mode === 'tricks' && !form.editing && !Object.keys(form.tricks).length) {
+    form.tricks = { ...form.bids };
+    form.prefilled = true;
+  }
   renderSheet();
-  sheet.showModal();
+  if (!sheet.open) sheet.showModal();
   $('.sheet-body', sheet).scrollTop = 0;
+  if (form.mode === 'scores' && !form.editing) {
+    // Straight to typing, but not on top of a value that's already there.
+    $$('[data-score]', sheet).find((el) => !el.value)?.focus();
+  }
 }
 
-// Players in bidding order: left of the dealer first, dealer last.
+// Players in bidding order: left of the dealer first, dealer last. Every
+// list in the sheet uses it, so rows never jump around between sheets.
 function bidOrder(game, index) {
   const d = game.players.indexOf(dealerFor(game, index));
   return game.players.map((_, i) => game.players[(d + 1 + i) % game.players.length]);
 }
 
-function chipRow(group, pid, from, to, value, extra = '') {
+// Number buttons from..to on an even grid: one row up to 7, then two (or
+// three) balanced rows rather than a lonely last button.
+function chipRow(group, pid, from, to, value, label) {
+  const count = to - from + 1;
+  const cols = count <= 7 ? count : count <= 14 ? Math.ceil(count / 2) : Math.ceil(count / 3);
   let html = '';
-  for (let v = from; v <= to; v++) html += `<button type="button" class="nchip${value === v ? ' on' : ''}" data-g="${group}" data-pid="${pid}" data-v="${v}">${v}</button>`;
-  return `<div class="nchips${extra}">${html}</div>`;
+  for (let v = from; v <= to; v++) {
+    const on = value === v;
+    const pre = on && form.prefilled && group === 'tricks' && !form.touched[pid];
+    html += `<button type="button" class="nchip${on ? ' on' : ''}${pre ? ' pre' : ''}" data-g="${group}" data-pid="${pid}" data-v="${v}" ${pressed(on)}>${v}</button>`;
+  }
+  return `<div class="nchips" style="--cols:${cols}" role="group" aria-label="${esc(label)}">${html}</div>`;
 }
 
 function sheetSections(game) {
   const f = form;
   const cards = cardsFor(game, f.index);
   const dealer = dealerFor(game, f.index);
+  const totals = summarize(game).totals;
+  const order = bidOrder(game, f.index);
   const out = [];
-  const nameCell = (pid, more = '') => `<span class="pl">${esc(pname(pid))}${pid === dealer ? ` <span class="deal-mark" title="${tt('game.dealer')}">${icon('cards')}</span>` : ''}${more}</span>`;
+  const nameCell = (pid, more = '') => `<span class="pl"><span class="pl-name">${esc(pname(pid))}</span>${pid === dealer ? ` <span class="deal-mark" title="${tt('game.dealer')}">${icon('cards')}</span>` : ''}<span class="tot">Σ ${fmt(totals[pid] ?? 0)}</span>${more}</span>`;
   const maxN = cards ?? 13;
+  const inline = maxN + 1 <= 5 ? '' : ' col';
+  const both = f.mode.includes('+');
+  const show = (part) => !both || (f.tab === 'first') === (part === 'first');
+
+  if (both) {
+    const [a, b] = f.mode === 'bids+tricks' ? ['sheet.bids', 'sheet.tricks'] : ['sheet.contractTitle', 'sheet.tricks'];
+    out.push(`<div class="segmented tabs" role="tablist">
+      <button type="button" role="tab" data-tab="first" class="${f.tab === 'first' ? 'on' : ''}" aria-selected="${f.tab === 'first'}">${tt(a)}</button>
+      <button type="button" role="tab" data-tab="second" class="${f.tab === 'second' ? 'on' : ''}" aria-selected="${f.tab === 'second'}">${tt(b)}</button></div>`);
+  }
 
   if (f.mode === 'scores') {
-    out.push(`<div class="entry-list">${game.players.map((pid) => `
-      <div class="entry">${nameCell(pid)}
+    out.push(`<div class="entry-list">${order.map((pid, i) => `
+      <div class="entry" data-row="${pid}">${nameCell(pid)}
         <div class="stepper">
-          <button type="button" class="step" data-step="-1" data-pid="${pid}" aria-label="−1">−</button>
-          <input type="text" inputmode="numeric" pattern="-?[0-9]*" class="num" data-score="${pid}" value="${f.scores[pid] ?? ''}" aria-label="${esc(pname(pid))}">
-          <button type="button" class="step" data-step="1" data-pid="${pid}" aria-label="+1">+</button>
-          <button type="button" class="step" data-neg="${pid}" aria-label="±">±</button>
+          <button type="button" class="step" data-step="-1" data-pid="${pid}" aria-label="${esc(pname(pid))} −1">−</button>
+          <input type="text" inputmode="numeric" enterkeyhint="${i === order.length - 1 ? 'done' : 'next'}" autocomplete="off" class="num${f.raw[pid] != null && !Number.isInteger(f.scores[pid]) && f.raw[pid] !== '' ? ' invalid' : ''}" data-score="${pid}" value="${esc(f.raw[pid] ?? f.scores[pid] ?? '')}" aria-label="${esc(pname(pid))}">
+          <button type="button" class="step" data-step="1" data-pid="${pid}" aria-label="${esc(pname(pid))} +1">+</button>
+          <button type="button" class="step" data-neg="${pid}" aria-label="${esc(pname(pid))} ±">±</button>
         </div>
       </div>`).join('')}</div>`);
   }
 
-  if (f.mode.startsWith('bids')) {
-    out.push(`${f.mode.includes('+') ? `<h3>${tt('sheet.bids')}</h3>` : ''}<div class="entry-list">${bidOrder(game, f.index).map((pid) => `
-      <div class="entry col">${nameCell(pid)}${chipRow('bids', pid, 0, maxN, f.bids[pid])}</div>`).join('')}</div>`);
-  }
-
-  if (f.mode.endsWith('tricks') && !f.mode.endsWith('atricks')) {
-    out.push(`${f.mode.includes('+') ? `<h3>${tt('sheet.tricks')}</h3>` : ''}<div class="entry-list">${game.players.map((pid) => `
-      <div class="entry col">${nameCell(pid, ` <span class="muted">· ${tt('table.bid')} ${f.bids[pid] ?? '–'}</span><span class="preview" data-preview="${pid}"></span>`)}
-      ${chipRow('tricks', pid, 0, maxN, f.tricks[pid])}</div>`).join('')}</div>`);
-  }
-
-  if (f.mode.startsWith('contract')) {
-    const total = tricksTotal(game, f.index);
-    const c = f.contract;
-    out.push(`<h3>${tt('am.kurtier')}</h3><div class="pchips">${game.players.map((pid) =>
-      `<button type="button" class="pchip${c.kurtier === pid ? ' on' : ''}" data-g="kurtier" data-pid="${pid}">${esc(pname(pid))}</button>`).join('')}</div>`);
-    out.push(`<h3>${tt('am.bid')}</h3>${chipRow('bid', '', minBid(game, f.index), total, c.bid, ' wrap')}`);
-    if (c.kurtier) {
-      out.push(`<h3>${tt('am.partner')}</h3><div class="pchips">${game.players.filter((pid) => pid !== c.kurtier).map((pid) =>
-        `<button type="button" class="pchip${c.partner === pid ? ' on' : ''}" data-g="partner" data-pid="${pid}">${esc(pname(pid))}</button>`).join('')}
-        <button type="button" class="pchip${c.partner === null ? ' on' : ''}" data-g="partner" data-pid="">${tt('am.alone')}</button></div>`);
+  if (f.mode.startsWith('bids') && show('first')) {
+    out.push(`<div class="entry-list">${order.map((pid) => `
+      <div class="entry${inline}" data-row="${pid}">${nameCell(pid)}${chipRow('bids', pid, 0, maxN, f.bids[pid], `${pname(pid)}: ${t('sheet.bids')}`)}</div>`).join('')}</div>`);
+    if (f.mode === 'bids' && !f.editing) {
+      out.push(`<button type="button" class="link" id="both-at-once">${tt('sheet.bothAtOnce')}</button>`);
     }
   }
 
-  if (f.mode.endsWith('atricks')) {
+  if ((f.mode === 'tricks' || f.mode === 'bids+tricks') && show('second')) {
+    out.push(`<div class="entry-list">${order.map((pid) => `
+      <div class="entry${inline}" data-row="${pid}">${nameCell(pid, ` <span class="muted bidref">${tt('table.bid')} ${f.bids[pid] ?? '–'}</span><span class="preview" data-preview="${pid}"></span>`)}
+      ${chipRow('tricks', pid, 0, maxN, f.tricks[pid], `${pname(pid)}: ${t('sheet.tricks')}`)}</div>`).join('')}</div>`);
+  }
+
+  if (f.mode.startsWith('contract') && show('first')) {
+    const total = tricksTotal(game, f.index);
+    const c = f.contract;
+    out.push(`<h3>${tt('am.kurtier')}</h3><div class="pchips" role="group" aria-label="${tt('am.kurtier')}">${order.map((pid) =>
+      `<button type="button" class="pchip${c.kurtier === pid ? ' on' : ''}" data-g="kurtier" data-pid="${pid}" ${pressed(c.kurtier === pid)}>${esc(pname(pid))}</button>`).join('')}</div>`);
+    out.push(`<h3>${tt('am.bid')}</h3>${chipRow('bid', '', minBid(game, f.index), total, c.bid, t('am.bid'))}`);
+    if (c.kurtier) {
+      out.push(`<h3>${tt('am.partner')}</h3><div class="pchips" role="group" aria-label="${tt('am.partner')}">${order.filter((pid) => pid !== c.kurtier).map((pid) =>
+        `<button type="button" class="pchip${c.partner === pid ? ' on' : ''}" data-g="partner" data-pid="${pid}" ${pressed(c.partner === pid)}>${esc(pname(pid))}</button>`).join('')}
+        <button type="button" class="pchip${c.partner === null ? ' on' : ''}" data-g="partner" data-pid="" ${pressed(c.partner === null)}>${tt('am.alone')}</button></div>`);
+    }
+  }
+
+  if (f.mode.endsWith('atricks') && show('second')) {
     const c = f.contract;
     const total = tricksTotal(game, f.index);
-    if (f.mode === 'atricks') out.push(`<p class="contract-line">${tt('am.contractLine', { k: pname(c.kurtier), bid: c.bid, p: c.partner ? pname(c.partner) : t('am.alone') })}</p>`);
+    if (c.kurtier && Number.isInteger(c.bid)) out.push(`<p class="contract-line">${tt('am.contractLine', { k: pname(c.kurtier), bid: c.bid, p: c.partner ? pname(c.partner) : t('am.alone') })}</p>`);
     if (c.kurtier && c.partner !== undefined) {
-      out.push(`<h3>${tt('am.othersTricks')}</h3><div class="entry-list">${game.players.filter((pid) => pid !== c.kurtier && pid !== c.partner).map((pid) => `
-        <div class="entry col">${nameCell(pid)}${chipRow('tricks', pid, 0, total, f.tricks[pid])}</div>`).join('')}</div>`);
+      out.push(`<h3>${tt('am.othersTricks')}</h3><div class="entry-list">${order.filter((pid) => pid !== c.kurtier && pid !== c.partner).map((pid) => `
+        <div class="entry col" data-row="${pid}">${nameCell(pid)}${chipRow('tricks', pid, 0, total, f.tricks[pid], `${pname(pid)}: ${t('sheet.tricks')}`)}</div>`).join('')}</div>`);
     }
   }
   return out.join('');
 }
 
-// Validity + summary line for the current form.
+// Fritt input: "−3", "+4", " 7 " are all fine.
+function parseScore(raw) {
+  const s = String(raw).replace(/[−–—]/g, '-').replace(/\s+/g, '');
+  if (s === '') return { empty: true };
+  if (!/^[+-]?\d+$/.test(s)) return { invalid: true };
+  return { value: Math.max(-100000, Math.min(100000, Number(s))) };
+}
+
+// Validity, the summary lines, which players are still missing (in table
+// order) and which tab they're on.
 function checkForm(game) {
   const f = form;
   const cards = cardsFor(game, f.index);
-  const all = (obj, pids) => pids.every((pid) => Number.isInteger(obj[pid]));
+  const order = bidOrder(game, f.index);
+  const missingOf = (obj, pids) => pids.filter((pid) => !Number.isInteger(obj[pid]));
   const lines = [];
+  const missing = [];
+  let missingTab = null;
   let ok = true;
 
   if (f.mode === 'scores') {
-    ok = all(f.scores, game.players);
-    if (!ok) lines.push(t('sheet.fillAll'));
-  }
-  if (f.mode.startsWith('bids')) {
-    if (!all(f.bids, game.players)) ok = false;
-    const bal = bidBalance(game, f.bids, f.index);
-    if (bal != null && Object.keys(f.bids).length) {
-      lines.push(balanceHtml(bal, game, f.bids));
+    const invalid = order.filter((pid) => f.raw[pid] != null && parseScore(f.raw[pid]).invalid);
+    const filled = order.filter((pid) => Number.isInteger(f.scores[pid]));
+    if (invalid.length) {
+      ok = false;
+      lines.push(`<span class="warn">${tt('sheet.invalid', { names: names(invalid) })}</span>`);
+      missing.push(...invalid);
+    } else if (!filled.length) {
+      ok = false;
+      missing.push(...order);
+      if (f.tried) lines.push(tt('sheet.missing', { names: names(order) }));
+    } else if (filled.length < order.length) {
+      lines.push(tt('sheet.blankZero'));
     }
   }
-  if (f.mode.endsWith('tricks') && !f.mode.endsWith('atricks')) {
-    if (!all(f.tricks, game.players)) ok = false;
-    if (cards != null) {
+
+  if (f.mode.startsWith('bids')) {
+    const m = missingOf(f.bids, order);
+    if (m.length) {
+      ok = false;
+      missing.push(...m);
+      missingTab ??= 'first';
+      if (f.tried || m.length < order.length) lines.push(tt('sheet.missingBids', { names: names(m) }));
+    } else if (f.mode === 'bids') {
+      lines.push(bidsLine(game, f.bids, f.index));
+    }
+  }
+
+  if (f.mode === 'tricks' || f.mode === 'bids+tricks') {
+    const m = missingOf(f.tricks, order);
+    if (m.length) {
+      ok = false;
+      missing.push(...m);
+      missingTab ??= 'second';
+      if (f.tried || m.length < order.length) lines.push(tt('sheet.missingTricks', { names: names(m) }));
+    } else if (cards != null) {
       let n = 0;
-      for (const pid of game.players) n += f.tricks[pid] ?? 0;
-      if (all(f.tricks, game.players) && n !== cards) {
+      for (const pid of order) n += f.tricks[pid];
+      if (n !== cards) {
         ok = false;
         lines.push(`<span class="warn">${tt('tricks.mismatch', { n, cards })}</span>`);
+      } else {
+        lines.push(`<span class="okline">${tt('tricks.ok', { n, cards })}</span>`);
       }
     }
+    if (f.prefilled && !Object.keys(f.touched).length) lines.unshift(tt('tricks.prefilled'));
   }
+
   if (f.mode.startsWith('contract')) {
     const c = f.contract;
     if (!c.kurtier || !Number.isInteger(c.bid) || c.partner === undefined) {
       ok = false;
-      lines.push(t('am.pick'));
+      missingTab ??= 'first';
+      lines.push(tt(c.kurtier && Number.isInteger(c.bid) ? 'am.pickPartner' : 'am.pick'));
     }
   }
+
   if (f.mode.endsWith('atricks') && f.contract.kurtier && f.contract.partner !== undefined) {
     const c = f.contract;
-    const others = game.players.filter((pid) => pid !== c.kurtier && pid !== c.partner);
-    if (!all(f.tricks, others)) ok = false;
-    else {
+    const others = order.filter((pid) => pid !== c.kurtier && pid !== c.partner);
+    const m = missingOf(f.tricks, others);
+    if (m.length) {
+      ok = false;
+      missing.push(...m);
+      missingTab ??= 'second';
+      if (f.tried || m.length < others.length) lines.push(tt('sheet.missingTricks', { names: names(m) }));
+    } else {
       const team = teamTricks(game, { contract: c, tricks: f.tricks }, f.index);
       if (team < 0) {
         ok = false;
         lines.push(`<span class="warn">${tt('am.tooMany', { n: tricksTotal(game, f.index) })}</span>`);
       } else {
-        lines.push(tt(team >= c.bid ? 'am.made' : 'am.failed', { n: team, bid: c.bid }));
+        const key = (team >= c.bid ? 'am.made' : 'am.failed') + (c.partner ? '' : 'Alone');
+        lines.push(`<span class="${team >= c.bid ? 'okline' : ''}">${tt(key, { n: team, bid: c.bid })}</span>`);
       }
     }
   }
-  return { ok, lines };
+  if (f.stale) {
+    ok = false;
+    lines.unshift(`<span class="warn">${tt('sheet.stale')}</span> <button type="button" class="link inline" id="sheet-refresh">${tt('sheet.refresh')}</button>`);
+  }
+  return { ok, lines, missing, missingTab };
 }
 
 function formRound(game) {
   const f = form;
   const r = { id: f.rid };
-  if (f.mode === 'scores') r.scores = f.scores;
+  if (f.mode === 'scores') {
+    // Blank counts as 0.
+    r.scores = Object.fromEntries(game.players.map((pid) => [pid, Number.isInteger(f.scores[pid]) ? f.scores[pid] : 0]));
+  }
   if (f.mode.startsWith('bids') || (f.mode === 'tricks' && Object.keys(f.bids).length)) r.bids = f.bids;
-  if (f.mode.includes('tricks') && !f.mode.endsWith('atricks')) r.tricks = f.tricks;
+  if (f.mode === 'tricks' || f.mode === 'bids+tricks') r.tricks = f.tricks;
   if (f.mode.startsWith('contract') || f.mode === 'atricks') r.contract = f.contract;
   if (f.mode.endsWith('atricks')) {
     const c = f.contract;
@@ -930,24 +1151,36 @@ function formRound(game) {
 
 function refreshSheet() {
   const game = state().games[form.gid];
-  const { ok, lines } = checkForm(game);
+  const { ok, lines, missing } = checkForm(game);
   $('#sheet-summary').innerHTML = lines.join('<br>');
-  $('#sheet-save').disabled = !ok;
+  const save = $('#sheet-save');
+  save.classList.toggle('is-disabled', !ok);
+  save.setAttribute('aria-disabled', String(!ok));
+  // The next row to fill gets a marker; after a save attempt, all the
+  // missing ones are flagged.
+  for (const row of $$('[data-row]', sheet)) {
+    row.classList.toggle('next', row.dataset.row === missing[0]);
+    row.classList.toggle('missing', form.tried && missing.includes(row.dataset.row));
+  }
   // Per-player score preview while entering tricks.
-  if (form.mode.includes('tricks') && !form.mode.endsWith('atricks')) {
-    const scores = (() => {
-      try {
-        return scoreRound(game, formRound(game), form.index);
-      } catch {
-        return null;
-      }
-    })();
+  if (form.mode === 'tricks' || form.mode === 'bids+tricks') {
     for (const el of $$('[data-preview]', sheet)) {
-      const v = scores?.[el.dataset.preview];
-      el.textContent = Number.isInteger(v) && Number.isInteger(form.tricks[el.dataset.preview]) ? ` → ${signed(v)}` : '';
+      const pid = el.dataset.preview;
+      const v = Number.isInteger(form.tricks[pid]) && Number.isInteger(form.bids[pid]) ? scoreRoundOne(game, pid) : null;
+      el.textContent = v != null ? ` → ${signed(v)}` : '';
       el.className = `preview${v > 0 ? ' pos' : v < 0 ? ' neg' : ''}`;
     }
   }
+  saveSheetDraft();
+}
+
+// One player's score for the round as entered so far.
+function scoreRoundOne(game, pid) {
+  const r = rulesOf(game);
+  const bid = form.bids[pid];
+  const got = form.tricks[pid];
+  const off = Math.abs(got - bid);
+  return (off === 0 ? r.hitBase + r.hitPerTrick * bid : -r.missPerTrick * off) + r.trickPoints * got;
 }
 
 function renderSheet() {
@@ -957,15 +1190,16 @@ function renderSheet() {
   const bodyScroll = $('.sheet-body', sheet)?.scrollTop ?? 0;
   const title = { scores: 'sheet.round', bids: 'sheet.bidsTitle', tricks: 'sheet.tricksTitle', contract: 'sheet.contractTitle', atricks: 'sheet.tricksTitle' }[form.mode] ?? 'sheet.round';
   const meta = [cards != null && entryOf(game) === 'bids' ? tt('game.cards', { n: cards }) : '', dealer ? `${tt('game.dealer')}: ${esc(pname(dealer))}` : ''].filter(Boolean).join(' · ');
+  sheet.setAttribute('aria-labelledby', 'sheet-title');
   sheet.innerHTML = `
-    <form method="dialog" class="sheet-inner" id="sheet-form">
+    <form method="dialog" class="sheet-inner" id="sheet-form" novalidate>
       <header class="sheet-head">
-        <div><h2>${tt(title, { n: form.index + 1 })}</h2><p class="muted">${[title === 'sheet.round' ? '' : tt('sheet.round', { n: form.index + 1 }), meta].filter(Boolean).join(' · ')}</p></div>
+        <div><h2 id="sheet-title">${tt(title, { n: form.index + 1 })}</h2><p class="muted">${[title === 'sheet.round' ? '' : tt('sheet.round', { n: form.index + 1 }), meta].filter(Boolean).join(' · ')}</p></div>
         <button type="button" class="icon-btn" id="sheet-close" data-i18n-title="nav.close">${icon('x')}</button>
       </header>
       <div class="sheet-body">${sheetSections(game)}</div>
       <footer class="sheet-foot">
-        <p id="sheet-summary" class="summary"></p>
+        <p id="sheet-summary" class="summary" aria-live="polite"></p>
         <div class="row">
           ${form.editing ? `<button type="button" class="btn danger" id="sheet-delete">${icon('trash')}${tt('sheet.delete')}</button>` : ''}
           <button type="submit" class="btn primary big grow" id="sheet-save">${tt('sheet.save')}</button>
@@ -977,35 +1211,109 @@ function renderSheet() {
   refreshSheet();
 }
 
+// Another device changed the round this sheet is for: don't save on top of
+// it blindly.
+function checkStale() {
+  const game = state().games[form.gid];
+  if (!game) return closeSheet(true);
+  if (!form.stale && sheetSig(game, form.editing || form.mode === 'tricks' || form.mode === 'atricks' ? form.rid : null) !== form.sig) {
+    form.stale = true;
+    refreshSheet();
+  }
+}
+
+// Reopen on the current state, keeping what was entered.
+function refreshStale() {
+  const keep = { scores: form.scores, raw: form.raw, bids: form.bids, tricks: form.tricks, contract: form.contract };
+  const { req, editing, rid } = form;
+  const game = state().games[form.gid];
+  const sum = summarize(game);
+  const act = primaryAction(game, sum);
+  if (editing && !game.rounds.some((r) => r.id === rid)) return closeSheet(true);
+  openRound(editing ? req : act?.mode ?? req, editing ? rid : undefined);
+  if (!form) return;
+  for (const k of ['scores', 'raw', 'bids']) form[k] = { ...form[k], ...keep[k] };
+  if (form.mode.includes('tricks')) form.tricks = { ...form.tricks, ...keep.tricks };
+  if (form.mode.startsWith('contract')) form.contract = keep.contract;
+  form.dirty = true;
+  renderSheet();
+}
+
+// Closes the sheet; asks first if that would throw away entered values.
+function requestClose() {
+  if (form?.dirty && !confirm(t('sheet.discard'))) return;
+  closeSheet(true);
+}
+
+function closeSheet(discard = false) {
+  if (discard) clearSheetDraft();
+  form = null;
+  if (sheet.open) sheet.close();
+}
+
+sheet.addEventListener('cancel', (e) => {
+  // Escape / Android back.
+  e.preventDefault();
+  requestClose();
+});
+
 sheet.addEventListener('click', (e) => {
-  if (e.target === sheet) return sheet.close(); // backdrop
+  // The backdrop only closes an untouched sheet: a stray tap with a drink in
+  // the other hand mustn't lose a round.
+  if (e.target === sheet) {
+    if (!form?.dirty) closeSheet(true);
+    return;
+  }
   const b = e.target.closest('button');
   if (!b || !form) return;
-  if (b.id === 'sheet-close') return sheet.close();
+  if (b.id === 'sheet-close') return requestClose();
+  if (b.id === 'sheet-refresh') return refreshStale();
   if (b.id === 'sheet-delete') {
     if (!confirm(t('sheet.deleteConfirm'))) return;
-    live.dispatch({ type: 'deleteRound', gid: form.gid, rid: form.rid });
-    sheet.close();
+    const { gid, rid } = form;
+    closeSheet(true);
+    live.dispatch({ type: 'deleteRound', gid, rid });
+    return;
+  }
+  if (b.id === 'both-at-once') {
+    form.mode = 'bids+tricks';
+    form.tab = 'first';
+    form.dirty = true;
+    return renderSheet();
+  }
+  if (b.dataset.tab) {
+    form.tab = b.dataset.tab;
+    // Entering tricks right after bids: start them from the bids.
+    if (form.tab === 'second' && form.mode === 'bids+tricks' && !Object.keys(form.tricks).length) {
+      form.tricks = { ...form.bids };
+      form.prefilled = true;
+    }
+    renderSheet();
+    $('.sheet-body', sheet).scrollTop = 0;
     return;
   }
   if (b.dataset.g) {
     const g = b.dataset.g;
     const v = Number(b.dataset.v);
-    if (g === 'bids' || g === 'tricks') form[g][b.dataset.pid] = v;
-    else if (g === 'bid') form.contract.bid = v;
-    else if (g === 'kurtier') {
-      form.contract.kurtier = b.dataset.pid;
-      if (form.contract.partner === b.dataset.pid) form.contract.partner = undefined;
-    } else if (g === 'partner') form.contract.partner = b.dataset.pid || null;
-    if (g === 'kurtier' || g === 'partner') return renderSheet();
-    for (const x of $$(`[data-g="${g}"]${b.dataset.pid ? `[data-pid="${b.dataset.pid}"]` : ''}`, sheet)) x.classList.toggle('on', x === b);
-    refreshSheet();
-    // Move on to the next row, so a round is a quick series of taps.
+    const pid = b.dataset.pid;
+    form.dirty = true;
     if (g === 'bids' || g === 'tricks') {
-      const rows = $$('.entry', sheet);
-      const i = rows.findIndex((r) => r.contains(b));
-      rows[i + 1]?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      form[g][pid] = v;
+      form.touched[pid] = true;
+    } else if (g === 'bid') form.contract.bid = v;
+    else if (g === 'kurtier') {
+      form.contract.kurtier = pid;
+      if (form.contract.partner === pid) form.contract.partner = undefined;
+    } else if (g === 'partner') form.contract.partner = pid || null;
+    if (g === 'kurtier' || g === 'partner') return renderSheet();
+    autoFillLast(g);
+    for (const x of $$(`[data-g="${g}"]${pid ? `[data-pid="${pid}"]` : ''}`, sheet)) {
+      x.classList.toggle('on', x === b);
+      x.classList.remove('pre');
+      x.setAttribute('aria-pressed', String(x === b));
     }
+    refreshSheet();
+    if (g === 'bids' || g === 'tricks') advance(b, g);
     return;
   }
   if (b.dataset.step || b.dataset.neg) {
@@ -1013,35 +1321,91 @@ sheet.addEventListener('click', (e) => {
     const input = $(`[data-score="${pid}"]`, sheet);
     const cur = Number.isInteger(form.scores[pid]) ? form.scores[pid] : 0;
     form.scores[pid] = b.dataset.neg ? -cur : cur + Number(b.dataset.step);
-    input.value = form.scores[pid];
+    form.raw[pid] = String(form.scores[pid]);
+    input.value = form.raw[pid];
+    input.classList.remove('invalid');
+    form.dirty = true;
     refreshSheet();
   }
 });
 
+// With the cards known, the last player's tricks are whatever is left.
+function autoFillLast(g) {
+  if (g !== 'tricks' || !(form.mode === 'tricks' || form.mode === 'bids+tricks') || form.prefilled) return;
+  const game = state().games[form.gid];
+  const cards = cardsFor(game, form.index);
+  if (cards == null) return;
+  const open = game.players.filter((pid) => !Number.isInteger(form.tricks[pid]));
+  if (open.length !== 1) return;
+  let taken = 0;
+  for (const pid of game.players) taken += form.tricks[pid] ?? 0;
+  const rest = cards - taken;
+  if (rest >= 0 && rest <= cards) {
+    form.tricks[open[0]] = rest;
+    renderSheet();
+  }
+}
+
+// After a tap, move on: scroll the next empty row into view, and once all
+// bids are in (entering both), switch to the tricks tab.
+function advance(b, g) {
+  const rows = $$('.entry', sheet);
+  const i = rows.findIndex((r) => r.contains(b));
+  const next = rows.slice(i + 1).find((r) => !$('.nchip.on', r)) ?? rows[i + 1];
+  next?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  if (g === 'bids' && form.mode === 'bids+tricks' && form.tab === 'first') {
+    const game = state().games[form.gid];
+    if (game.players.every((pid) => Number.isInteger(form.bids[pid]))) {
+      form.tab = 'second';
+      form.tricks = Object.keys(form.tricks).length ? form.tricks : { ...form.bids };
+      form.prefilled = true;
+      renderSheet();
+      $('.sheet-body', sheet).scrollTop = 0;
+    }
+  }
+}
+
 sheet.addEventListener('input', (e) => {
   const pid = e.target.dataset.score;
   if (!pid) return;
-  const raw = e.target.value.replace(/[−–]/g, '-').trim();
-  form.scores[pid] = /^-?\d+$/.test(raw) ? Math.max(-100000, Math.min(100000, Number(raw))) : undefined;
+  const p = parseScore(e.target.value);
+  form.raw[pid] = e.target.value;
+  form.scores[pid] = p.value;
+  e.target.classList.toggle('invalid', !!p.invalid);
+  form.dirty = true;
   refreshSheet();
 });
 
 sheet.addEventListener('keydown', (e) => {
-  // Enter in a score field jumps to the next one, then submits.
+  // Enter in a score field jumps to the next one, then saves.
   if (e.key !== 'Enter' || !e.target.dataset.score) return;
   e.preventDefault();
   const inputs = $$('[data-score]', sheet);
   const next = inputs[inputs.indexOf(e.target) + 1];
   if (next) next.focus();
-  else if (!$('#sheet-save').disabled) $('#sheet-form').requestSubmit();
+  else $('#sheet-form').requestSubmit();
 });
 
 sheet.addEventListener('submit', (e) => {
   e.preventDefault();
   const game = state().games[form.gid];
-  if (!checkForm(game).ok) return;
-  live.dispatch({ type: 'putRound', gid: form.gid, round: formRound(game) });
-  sheet.close();
+  const { ok, missing, missingTab } = checkForm(game);
+  if (!ok) {
+    // Show what's missing instead of a dead button.
+    form.tried = true;
+    if (missingTab && form.tab && form.tab !== missingTab) {
+      form.tab = missingTab;
+      renderSheet();
+    } else refreshSheet();
+    const row = $(`[data-row="${missing[0]}"]`, sheet);
+    row?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    $('input', row ?? sheet)?.focus?.();
+    return;
+  }
+  const { gid } = form;
+  const round = formRound(game);
+  closeSheet(true);
+  live.dispatch({ type: 'putRound', gid, round });
 });
 
 sheet.addEventListener('close', () => { form = null; });
@@ -1051,41 +1415,51 @@ sheet.addEventListener('close', () => { form = null; });
 function openDialog(kind, html, wire) {
   dlg.dataset.kind = kind;
   dlg.innerHTML = `<div class="dlg-inner">${html}</div>`;
+  labelDialog();
   applyI18n(dlg);
   wire?.();
   if (!dlg.open) dlg.showModal();
+}
+
+function labelDialog() {
+  const h = $('h2', dlg);
+  if (h) h.id = 'dlg-title';
+  dlg.setAttribute('aria-labelledby', 'dlg-title');
 }
 
 dlg.addEventListener('click', (e) => {
   if (e.target === dlg || e.target.closest('[data-close]')) dlg.close();
 });
 
+function openRules(game) {
+  openDialog('rules', `
+    <header class="dlg-head"><h2>${esc(gameName(game))}</h2><button type="button" class="icon-btn" data-close data-i18n-title="nav.close">${icon('x')}</button></header>
+    <ul class="rules-summary">${rulesSummary(rulesOf(game)).map((l) => `<li>${esc(l)}</li>`).join('')}</ul>
+    <button type="button" class="btn" id="m-edit">${icon('edit')}${tt('menu.edit')}</button>`, () => {
+    $('#m-edit').onclick = () => { dlg.close(); go(`#/s/${route.sid}/g/${game.id}/edit`); };
+  });
+}
+
 function openGameMenu() {
   const game = state().games[route.gid];
+  const sum = summarize(game);
   const item = (id, ic, label, cls = '') => `<button type="button" class="menu-item ${cls}" id="${id}">${icon(ic)}<span>${esc(label)}</span></button>`;
   openDialog('menu', `
     <header class="dlg-head"><h2>${esc(gameName(game))}</h2><button type="button" class="icon-btn" data-close data-i18n-title="nav.close">${icon('x')}</button></header>
     <div class="menu">
+      ${item('m-rules', 'book', t('menu.rules'))}
       ${item('m-dash', 'tv', t('menu.dashboard'))}
       ${item('m-share', 'qr', t('session.share'))}
-      ${item('m-again', 'plus', t('act.again'))}
+      ${sum.done ? item('m-again', 'plus', t('act.again')) : ''}
       ${item('m-end', game.ended ? 'play' : 'flag', t(game.ended ? 'menu.reopen' : 'menu.end'))}
-      ${item('m-rules', 'book', t('new.rules'))}
-      ${item('m-edit', 'edit', t('menu.edit'))}
       ${item('m-settings', 'gear', t('settings.title'))}
       ${item('m-delete', 'trash', t('menu.delete'), 'danger')}
     </div>`, () => {
+    $('#m-rules').onclick = () => openRules(game);
     $('#m-dash').onclick = () => { dlg.close(); go(`#/s/${route.sid}/g/${game.id}/dash`); };
     $('#m-share').onclick = () => openShare();
-    $('#m-again').onclick = () => { dlg.close(); go(`#/s/${route.sid}/new?from=${game.id}`); };
+    $('#m-again')?.addEventListener('click', () => { dlg.close(); go(`#/s/${route.sid}/new?from=${game.id}`); });
     $('#m-end').onclick = () => { live.dispatch({ type: 'endGame', gid: game.id, ended: !game.ended }); dlg.close(); };
-    $('#m-rules').onclick = () => openDialog('rules', `
-      <header class="dlg-head"><h2>${esc(gameName(game))}</h2><button type="button" class="icon-btn" data-close data-i18n-title="nav.close">${icon('x')}</button></header>
-      <ul class="rules-summary">${rulesSummary(rulesOf(game)).map((l) => `<li>${esc(l)}</li>`).join('')}</ul>
-      <button type="button" class="btn" id="m-edit2">${icon('edit')}${tt('menu.edit')}</button>`, () => {
-      $('#m-edit2').onclick = () => { dlg.close(); go(`#/s/${route.sid}/g/${game.id}/edit`); };
-    });
-    $('#m-edit').onclick = () => { dlg.close(); go(`#/s/${route.sid}/g/${game.id}/edit`); };
     $('#m-settings').onclick = () => openSettings();
     $('#m-delete').onclick = () => {
       if (!confirm(t('menu.deleteConfirm'))) return;
@@ -1113,6 +1487,7 @@ function renderShare() {
       <p class="muted">${tt('share.expiry')}</p>
       <button type="button" class="btn primary big" id="do-share">${icon('qr')}${tt(live.rec.expired ? 'share.again' : 'share.start')}</button>
     </div>`;
+    labelDialog();
     applyI18n(dlg);
     $('#do-share').onclick = async (e) => {
       e.target.disabled = true;
@@ -1137,16 +1512,19 @@ function renderShare() {
     </div>
     <p class="muted center small">${tt('share.expiry')}</p>
   </div>`;
+  labelDialog();
   applyI18n(dlg);
-  $('#copy-link').onclick = async () => {
-    try {
-      await navigator.clipboard.writeText(url);
-      toast(t('share.copied'));
-    } catch {
-      prompt(t('share.copy'), url);
-    }
-  };
+  $('#copy-link').onclick = () => copyLink(url);
   $('#native-share')?.addEventListener('click', () => navigator.share({ title: t('app.name'), url }).catch(() => {}));
+}
+
+async function copyLink(url) {
+  try {
+    await navigator.clipboard.writeText(url);
+    toast(t('share.copied'));
+  } catch {
+    prompt(t('share.copy'), url);
+  }
 }
 
 // --- Settings --------------------------------------------------------------------------
@@ -1158,11 +1536,11 @@ function openSettings() {
     <header class="dlg-head"><h2>${tt('settings.title')}</h2><button type="button" class="icon-btn" data-close data-i18n-title="nav.close">${icon('x')}</button></header>
     <section>
       <h3>${tt('settings.lang')}</h3>
-      <div class="segmented">${['auto', 'no', 'en'].map((l) => `<button type="button" data-lang="${l}" class="${settings.lang === l ? 'on' : ''}">${tt(`settings.lang.${l}`)}</button>`).join('')}</div>
+      <div class="segmented" role="group" aria-label="${tt('settings.lang')}">${['auto', 'no', 'en'].map((l) => `<button type="button" data-lang="${l}" class="${settings.lang === l ? 'on' : ''}" ${pressed(settings.lang === l)}>${tt(`settings.lang.${l}`)}</button>`).join('')}</div>
     </section>
     <section>
       <h3>${tt('settings.theme')}</h3>
-      <div class="themes">${themes.map((th) => `<button type="button" class="theme-swatch${settings.theme === th ? ' on' : ''}" data-theme-pick="${th}"><span class="sw sw-${th}"></span>${tt(`theme.${th}`)}</button>`).join('')}</div>
+      <div class="themes" role="group" aria-label="${tt('settings.theme')}">${themes.map((th) => `<button type="button" class="theme-swatch${settings.theme === th ? ' on' : ''}" data-theme-pick="${th}" ${pressed(settings.theme === th)}><span class="sw sw-${th}"></span>${tt(`theme.${th}`)}</button>`).join('')}</div>
     </section>
     <section>
       <label class="switch-row"><span>${tt('settings.wake')}</span><input type="checkbox" class="switch" id="wake"${settings.wake ? ' checked' : ''}></label>
@@ -1177,7 +1555,7 @@ function openSettings() {
     </section>
     ${recent.length ? `<section>
       <h3>${tt('settings.recent')}</h3>
-      <div class="chips">${recent.map((p) => `<button type="button" class="chip removable" data-forget="${esc(p.name)}">${esc(p.name)} ${icon('x')}</button>`).join('')}</div>
+      <div class="chips">${recent.map((p) => `<button type="button" class="chip removable" data-forget="${esc(p.name)}" aria-label="${tt('settings.forget', { name: p.name })}">${esc(p.name)} ${icon('x')}</button>`).join('')}</div>
     </section>` : ''}
     <p class="muted small center">${tt('settings.about')}</p>`, () => {
     refreshConnection();
@@ -1210,25 +1588,16 @@ function refreshConnection() {
   const pending = live.rec.pending.length;
   el.innerHTML = `
     <h3>${tt('conn.title')}</h3>
-    <p class="conn-status"><span class="conn-dot status-${live.status}"><span class="dot"></span>${tt(`status.${live.status}`)}</span>
+    <p class="conn-status"><span class="conn-dot status-${live.status}">${tt(`status.${live.status}`)}</span>
       ${pending ? `<span class="muted">${tt('conn.pending', { n: pending })}</span>` : ''}</p>
     <p>${tt('conn.code')}: <button type="button" class="link code" id="conn-share">${esc(live.rec.code)}</button></p>
     <h4>${tt('conn.devices', { n: devices.length })}</h4>
     <ul class="devices">${devices.map((d) => `<li>${icon('device')}<span>${esc(d.label || '?')}${d.id === me ? ` <span class="badge">${tt('conn.me')}</span>` : ''}</span><span class="muted">${tt('conn.since', { time: timeLabel(d.since) })}</span></li>`).join('') || `<li class="muted">${tt('conn.none')}</li>`}</ul>
     <p class="muted small">${tt('share.expiry')}</p>
-    <div class="row wrap">
-      <button type="button" class="btn" id="conn-copy">${icon('copy')}${tt('share.copy')}</button>
-      <button type="button" class="btn danger" id="conn-leave">${tt('conn.leave')}</button>
-    </div>`;
+    <div class="row wrap"><button type="button" class="btn" id="conn-copy">${icon('copy')}${tt('share.copy')}</button></div>
+    <div class="row wrap"><button type="button" class="btn danger" id="conn-leave">${tt('conn.leave')}</button></div>`;
   $('#conn-share').onclick = openShare;
-  $('#conn-copy').onclick = async () => {
-    try {
-      await navigator.clipboard.writeText(shareUrl(live.rec.code));
-      toast(t('share.copied'));
-    } catch {
-      prompt(t('share.copy'), shareUrl(live.rec.code));
-    }
-  };
+  $('#conn-copy').onclick = () => copyLink(shareUrl(live.rec.code));
   $('#conn-leave').onclick = () => {
     if (!confirm(t('conn.leaveConfirm'))) return;
     live.leave();
@@ -1265,7 +1634,7 @@ async function importSession(e) {
   }
 }
 
-// --- Dashboard -------------------------------------------------------------------------
+// --- Big screen ------------------------------------------------------------------------
 
 function dashGame() {
   const s = state();
@@ -1308,14 +1677,17 @@ function renderDash() {
   view.innerHTML = `
     <div class="dash">
       <header class="dash-head">
-        <div><h1>${esc(gameName(game))}</h1><div class="dash-info">${infoHtml(game, sum)}</div></div>
+        <div class="grow"><h1>${esc(gameName(game))}</h1><div class="dash-info">${infoHtml(game, sum)}</div></div>
+        ${qr}
         <a class="icon-btn exit" href="${exit}" data-i18n-title="dash.exit">${icon('x')}</a>
       </header>
       <div class="dash-body">
-        <ol class="board">${board}</ol>
+        <div class="dash-side">
+          ${last ? `<p class="board-legend">${tt('dash.lastRound')}</p>` : ''}
+          <ol class="board">${board}</ol>
+        </div>
         <div class="dash-table table-scroll">${tableHtml(game, sum, { interactive: false })}</div>
       </div>
-      ${qr}
     </div>`;
   applyI18n(view);
   const tbl = $('.dash-table');

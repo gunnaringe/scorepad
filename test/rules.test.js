@@ -124,3 +124,15 @@ test('player count checks follow the rules', () => {
   assert.equal(playerProblem(presetRules('free'), 1), null);
   assert.deepEqual(sanitizeRules({ entry: 'bids', cards: 'x', target: -5 }), { entry: 'bids', target: 0 });
 });
+
+test('two devices starting the same round merge instead of stranding one', () => {
+  const s = reduce([...players('a', 'b'), game('selbuvist', ['a', 'b']),
+    round({ id: 'fromB', bids: { a: 1, b: 0 } }),
+    round({ id: 'fromA', bids: { a: 0, b: 1 } })]);
+  const g = s.games.g;
+  assert.equal(g.rounds.length, 1);
+  assert.deepEqual(g.rounds[0], { id: 'fromB', bids: { a: 0, b: 1 } });
+  const sum = summarize(g);
+  assert.equal(sum.pending.id, 'fromB');
+  assert.equal(sum.cards, 1);
+});

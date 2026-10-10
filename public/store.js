@@ -31,7 +31,8 @@ const write = (key, value) => {
 
 // --- Settings ----------------------------------------------------------------
 
-export const defaultSettings = () => ({ lang: 'auto', theme: 'hytte', wake: false });
+// The screen stays on by default: it's on the table during the game.
+export const defaultSettings = () => ({ lang: 'auto', theme: 'hytte', wake: true });
 
 export function loadSettings() {
   return { ...defaultSettings(), ...read(K_SETTINGS, {}) };

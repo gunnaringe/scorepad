@@ -3,7 +3,7 @@
 // must never throw on bad input: events from other devices are untrusted and
 // are sanitized here, malformed ones are ignored.
 
-import { sanitizeRules, MAX_PLAYERS } from './rules.js';
+import { sanitizeRules, isComplete, MAX_PLAYERS } from './rules.js';
 
 export const EVENT_TYPES = [
   'addPlayer', 'renamePlayer',
@@ -118,7 +118,12 @@ const HANDLERS = {
     const round = sanitizeRound(e.round, g);
     if (!round) return;
     const i = g.rounds.findIndex((r) => r.id === round.id);
+    const last = g.rounds.at(-1);
     if (i >= 0) g.rounds[i] = round;
+    // Only the last round may be unfinished. A new round while it is (two
+    // devices entering the same bids) updates that round instead: last
+    // write wins, and nothing is left stranded mid-table.
+    else if (last && !isComplete(g, last)) g.rounds[g.rounds.length - 1] = { ...last, ...round, id: last.id };
     else g.rounds.push(round);
   },
   deleteRound(s, e) {

@@ -45,7 +45,9 @@ don't reuse its names, D1 database or rate-limit namespace (`1001`).
 - **Rounds** are upserted by id via `putRound`. Bid games first store
   `{ bids }` (or `{ contract }` for Amerikaner) and the round shows as
   pending; then `{ bids, tricks }`. `isComplete()` decides which, and only the
-  last round can be pending. Contract rounds store tricks only for players
+  last round can be pending: the reducer enforces it by merging a `putRound`
+  with an unknown id into an unfinished last round (two devices entering the
+  same bids → last write wins, nothing stranded). Contract rounds store tricks only for players
   outside the contract; kurtier + partner get the remainder.
 - **Sync:** one Durable Object per code (`idFromName(code)`), SQLite table
   `events(seq, id UNIQUE, body)`. Clients send `hello {since}` and get a
@@ -59,6 +61,15 @@ don't reuse its names, D1 database or rate-limit namespace (`1001`).
 - **Expired session:** the client sees close code 4404 (or a 404 from
   `GET /api/session/:code` after a failed connect), keeps a local copy
   (`expired: true`) and can share again with a new code.
+- **Round sheet** (`openRound`/`form`): every list in it uses `bidOrder()`
+  (left of the dealer first), so rows never move between the bid and trick
+  sheets. Entered values are a draft in localStorage (`scorepad-sheet-v1`)
+  until saved or discarded; the backdrop only closes an untouched sheet,
+  Escape/back asks first, and `renderGame` reopens a leftover draft. Tricks
+  start from the bids (`form.prefilled`, outlined chips). "Lagre" is never
+  `disabled`: it's `aria-disabled` and, when tapped, marks what's missing.
+  If another device changes the round while the sheet is open
+  (`sheetSig`/`checkStale`), saving is blocked until "Oppdater".
 - **Devices aren't players.** Connections are listed only under Settings →
   Connection. The dashboard is a view mode (`#/s/:sid/dash`, or
   `/s/CODE?view=dashboard` from a link), not a role.

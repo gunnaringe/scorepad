@@ -22,7 +22,7 @@ const addPlayers = async (p, names) => { for (const n of names) { await p.fill('
 {
   const { p } = await mk();
   await p.goto(`${BASE}/`);
-  await p.click('#new-session');
+  await p.click('#new-game');
   await p.click('[data-preset="free"]');
   await addPlayers(p, ['Kari Nordmann', 'Ola', 'Per', 'Lise', 'Mona', 'Trond', 'Anne', 'Bjørn']);
   await p.click('#start');
@@ -48,7 +48,7 @@ const addPlayers = async (p, names) => { for (const n of names) { await p.fill('
 {
   const { p } = await mk();
   await p.goto(`${BASE}/`);
-  await p.click('#new-session');
+  await p.click('#new-game');
   await p.click('[data-preset="amerikaner"]');
   await addPlayers(p, ['Kari', 'Ola', 'Per', 'Lise']);
   await p.click('#start');
@@ -72,7 +72,7 @@ const addPlayers = async (p, names) => { for (const n of names) { await p.fill('
   const A = await mk();
   const B = await mk({ viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1, locale: 'en-GB' });
   await A.p.goto(`${BASE}/`);
-  await A.p.click('#new-session');
+  await A.p.click('#new-game');
   await addPlayers(A.p, ['Kari', 'Ola', 'Per']);
   await A.p.click('#start');
   await A.p.click('#game-menu');
