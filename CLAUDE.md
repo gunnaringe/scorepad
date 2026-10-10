@@ -35,7 +35,7 @@ don't reuse its names, D1 database or rate-limit namespace (`1001`).
 - **One game model.** A game is `{ name, rules, players, rounds }`. `rules`
   is a flat object (defaults in `DEFAULT_RULES`): `entry` (`scores` | `bids` |
   `contract`) picks the round form, `cards` the card sequence, and the rest
-  are scoring/end parameters. Fritt/Selbuvist/Amerikaner are just `PRESETS`
+  are scoring/end parameters. Fritt/Selbuwhist/Amerikaner are just `PRESETS`
   (partial rule objects); `matchPreset()` tells whether rules are unchanged.
   Nothing branches on a preset name, only on rule values. Add a rule by giving
   it a default, an i18n label (`rule.<key>`; a test checks), a field in

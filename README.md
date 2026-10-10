@@ -4,7 +4,7 @@ Score keeping for card games, built for phones at the cabin table:
 [poengblokka.apphub.casa](https://poengblokka.apphub.casa)
 (also [scorepad.apphub.casa](https://scorepad.apphub.casa)).
 
-- **Games:** every game is a name plus rules. Fritt (free scores), Selbuvist
+- **Games:** every game is a name plus rules. Fritt (free scores), Selbuwhist
   (bid exact tricks, 10→1→10 cards) and Amerikaner (kurtier + partner vs. the
   rest, first to 52) are presets; every rule can be tweaked, also mid-game
   (all rounds are rescored). Bids are entered first and shown while the hand

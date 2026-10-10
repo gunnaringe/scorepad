@@ -34,7 +34,7 @@ export const I18N = {
     'session.deleteConfirm': "Slette spillkvelden og alle spillene i den fra denne enheten?",
 
     'preset.free': 'Fritt',
-    'preset.selbuvist': 'Selbuvist',
+    'preset.selbuvist': 'Selbuwhist',
     'preset.amerikaner': 'Amerikaner',
 
 
@@ -316,7 +316,7 @@ export const I18N = {
     'session.deleteConfirm': "Delete this game night and all its games from this device?",
 
     'preset.free': 'Free',
-    'preset.selbuvist': 'Selbuvist',
+    'preset.selbuvist': 'Selbuwhist',
     'preset.amerikaner': 'Amerikaner',
 
 

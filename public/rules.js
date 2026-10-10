@@ -4,12 +4,12 @@
 // rules mid-game, is safe.
 //
 // Every game has the same shape: a name plus a `rules` object. Presets
-// (Fritt, Selbuvist, Amerikaner) are just starting points for the rules.
+// (Fritt, Selbuwhist, Amerikaner) are just starting points for the rules.
 
 export const DEFAULT_RULES = {
   // How a round is entered:
   //   scores   - a number per player
-  //   bids     - everyone bids tricks, then tricks taken (Selbuvist, Oh Hell)
+  //   bids     - everyone bids tricks, then tricks taken (Selbuwhist, Oh Hell)
   //   contract - the highest bidder (kurtier) and a partner against the rest
   //              (Amerikaner)
   entry: 'scores',

@@ -71,7 +71,9 @@ const sameDay = (a, b) => new Date(a).toDateString() === new Date(b).toDateStrin
 const state = () => live?.state;
 const pname = (pid) => state()?.players[pid]?.name ?? '?';
 const names = (pids) => pids.map(pname).join(', ');
-const gameName = (g) => g.name || t('game.untitled');
+// Games saved under the old spelling show the current name.
+const LEGACY_NAMES = { Selbuvist: 'preset.selbuvist' };
+const gameName = (g) => (LEGACY_NAMES[g.name] ? t(LEGACY_NAMES[g.name]) : g.name || t('game.untitled'));
 const entryOf = (g) => rulesOf(g).entry;
 const pressed = (on) => `aria-pressed="${on ? 'true' : 'false'}"`;
 
@@ -376,7 +378,7 @@ const suggestedName = (rules) => {
 
 // Names the app made up (in either language) aren't carried over: an empty
 // name follows the rules when another preset is picked.
-const autoName = (name) => !name || ['no', 'en'].some((l) =>
+const autoName = (name) => !name || name in LEGACY_NAMES || ['no', 'en'].some((l) =>
   [...PRESET_IDS.map((id) => I18N[l][`preset.${id}`]), I18N[l]['rules.ownName']].includes(name));
 
 function initDraft() {
@@ -451,7 +453,7 @@ function compactSummary(r) {
 }
 
 const SOURCES = {
-  selbuvist: '<a href="https://no.wikipedia.org/wiki/Selbuvist" target="_blank" rel="noopener">Wikipedia: Selbuvist</a>',
+  selbuvist: '<a href="https://no.wikipedia.org/wiki/Selbuvist" target="_blank" rel="noopener">Wikipedia</a>',
   amerikaner: '<a href="https://no.wikipedia.org/wiki/Amerikaner_(kortspill)" target="_blank" rel="noopener">Wikipedia: Amerikaner</a>',
 };
 
