@@ -1,0 +1,12 @@
+{
+  "name": "scorepad",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "test": "node --test test/"
+  },
+  "devDependencies": {
+    "wrangler": "^4.149.0"
+  }
+}

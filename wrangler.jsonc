@@ -1,0 +1,33 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // Must match the Worker created by the Workers Builds import (it owns the
+  // custom domains). Never rename.
+  "name": "scorepad",
+  "main": "src/worker.js",
+  "compatibility_date": "2026-10-01",
+  "assets": {
+    "directory": "public",
+    // Unknown paths (/s/CODE from a QR code) get index.html; the app routes
+    // client-side.
+    "not_found_handling": "single-page-application",
+    // Only the API runs the Worker; everything else is free static assets.
+    "run_worker_first": ["/api/*"]
+  },
+  // One SQLite-backed Durable Object per shared session (the free plan only
+  // allows SQLite-backed classes).
+  "durable_objects": {
+    "bindings": [{ "name": "SESSIONS", "class_name": "Session" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Session"] }],
+  // Throttles session creation and code guesses per IP. The namespace id is
+  // account-wide: 1001 belongs to the scoreboard Worker.
+  "ratelimits": [
+    { "name": "JOIN_LIMIT", "namespace_id": "2001", "simple": { "limit": 30, "period": 60 } }
+  ],
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [
+    { "pattern": "poengblokka.apphub.casa", "custom_domain": true },
+    { "pattern": "scorepad.apphub.casa", "custom_domain": true }
+  ]
+}
