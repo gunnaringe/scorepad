@@ -181,8 +181,13 @@ export function scoreRound(game, round, i = game.rounds.indexOf(round)) {
     for (const pid of game.players) out[pid] = round.scores[pid] ?? 0;
   } else if (r.entry === 'bids') {
     for (const pid of game.players) {
+      // Joined after this round: nothing to score.
+      if (!(pid in round.tricks)) {
+        out[pid] = 0;
+        continue;
+      }
       const bid = round.bids?.[pid] ?? 0;
-      const got = round.tricks[pid] ?? 0;
+      const got = round.tricks[pid];
       const off = Math.abs(got - bid);
       out[pid] = (off === 0 ? r.hitBase + r.hitPerTrick * bid : -r.missPerTrick * off) + r.trickPoints * got;
     }

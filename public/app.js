@@ -381,7 +381,14 @@ function initDraft() {
   const s = state();
   if (route.edit) {
     const g = s.games[route.edit];
-    draft = { edit: g.id, name: autoName(g.name) ? '' : g.name, rules: rulesOf(g), players: [], firstDealer: 0 };
+    // When editing, the dealer marker is who deals now (the current round).
+    draft = {
+      edit: g.id,
+      name: autoName(g.name) ? '' : g.name,
+      rules: rulesOf(g),
+      players: g.players.map((pid) => ({ pid, name: pname(pid) })),
+      firstDealer: Math.max(0, g.players.indexOf(summarize(g).dealer)),
+    };
     return;
   }
   const from = s.games[route.from] ?? s.games[s.gameOrder.at(-1)];
@@ -479,8 +486,8 @@ function renderNew() {
   const editing = !!draft.edit;
   const preset = matchPreset(r);
   const n = draft.players.length;
-  const problem = editing ? null : playerProblem(r, n);
-  const chips = editing ? [] : candidates().slice(0, 14);
+  const problem = playerProblem(r, n);
+  const chips = candidates().slice(0, 14);
   const back = editing ? `#/s/${route.sid}/g/${draft.edit}` : `#/s/${route.sid}`;
   const nameSection = `<section>
     <h2><label for="gname">${tt('new.nameOptional')}</label></h2>
@@ -512,14 +519,16 @@ function renderNew() {
           </div>
         </section>
 
-        ${editing ? `<p class="hint">${tt('new.editHint')}</p>` : `<section>
+        <section>
           <h2>${tt('new.playersTitle')} <span class="muted">${n}</span></h2>
-          <p class="hint seat-hint">${tt('new.seatHint')}</p>
+          <p class="hint seat-hint">${tt(editing ? 'new.editPlayersHint' : 'new.seatHint')}</p>
           ${n ? `<ol class="seats">${draft.players.map((pl, i) => `
             <li>
               <span class="seat-no">${i + 1}</span>
-              <span class="seat-name">${esc(pl.name)}</span>
-              <button type="button" class="dealer-btn${i === draft.firstDealer ? ' on' : ''}" data-dealer="${i}" ${pressed(i === draft.firstDealer)} title="${tt('new.dealsFirst')}">${tt('new.dealer')}</button>
+              ${draft.renaming === i
+                ? `<input class="seat-input" data-rename-input="${i}" maxlength="40" value="${esc(pl.name)}" aria-label="${tt('new.rename', { name: pl.name })}" enterkeyhint="done" autocapitalize="words">`
+                : `<button type="button" class="seat-name" data-rename="${i}" title="${tt('new.rename', { name: pl.name })}">${esc(pl.name)}${icon('edit')}</button>`}
+              <button type="button" class="dealer-btn${i === draft.firstDealer ? ' on' : ''}" data-dealer="${i}" ${pressed(i === draft.firstDealer)} title="${tt(editing ? 'new.dealsNow' : 'new.dealsFirst')}">${tt('new.dealer')}</button>
               <button type="button" class="icon-btn small" data-move="${i}" data-dir="-1" ${i === 0 ? 'disabled' : ''} data-i18n-title="new.up">${icon('up')}</button>
               <button type="button" class="icon-btn small" data-move="${i}" data-dir="1" ${i === n - 1 ? 'disabled' : ''} data-i18n-title="new.down">${icon('down')}</button>
               <button type="button" class="icon-btn small" data-remove="${i}" data-i18n-title="new.remove">${icon('x')}</button>
@@ -534,11 +543,11 @@ function renderNew() {
           ${chips.length ? `<div class="chips">${chips.map((c) => `<button type="button" class="chip" data-add="${esc(c)}">+ ${esc(c)}</button>`).join('')}</div>` : ''}
           ${problem && n ? `<p class="hint warn">${tt(problem.key, problem)}</p>` : ''}
         </section>
-        ${nameSection}`}
+        ${editing ? `<p class="hint">${tt('new.editHint')}</p>` : nameSection}
       </div>
     </main>
     <footer class="action-bar">
-      <button type="button" class="btn primary big" id="start" ${editing || (n && !problem) ? '' : 'disabled'}>${tt(editing ? 'new.save' : 'new.start')}</button>
+      <button type="button" class="btn primary big" id="start" ${n && !problem ? '' : 'disabled'}>${tt(editing ? 'new.save' : 'new.start')}</button>
     </footer>`;
   applyI18n(view);
   wireNew();
@@ -546,7 +555,8 @@ function renderNew() {
 
 function candidates() {
   const s = state();
-  const taken = new Set(draft.players.map((p) => p.name.toLocaleLowerCase()));
+  // Names in the draft, and the old names of players being renamed.
+  const taken = new Set(draft.players.flatMap((p) => [p.name, s.players[p.pid]?.name ?? p.name]).map((n) => n.toLocaleLowerCase()));
   const seen = new Set();
   const out = [];
   for (const name of [...s.playerOrder.map((pid) => s.players[pid].name), ...store.recentPlayers().map((p) => p.name)]) {
@@ -592,8 +602,16 @@ function wireNew() {
     } else if (b.dataset.add) {
       addDraftPlayer(b.dataset.add);
       rerenderNew();
+    } else if (b.dataset.rename) {
+      draft.renaming = +b.dataset.rename;
+      rerenderNew();
+      const input = $('[data-rename-input]');
+      input?.focus();
+      input?.select();
     } else if (b.dataset.remove) {
       const i = +b.dataset.remove;
+      const pl = draft.players[i];
+      if (draft.edit && pl.pid && hasScores(draft.edit, pl.pid) && !confirm(t('new.removeConfirm', { name: pl.name }))) return;
       draft.players.splice(i, 1);
       if (draft.firstDealer >= draft.players.length) draft.firstDealer = 0;
       rerenderNew();
@@ -622,7 +640,29 @@ function wireNew() {
   };
   $('.rules-editor').ontoggle = (e) => { draft.open = e.target.open; };
   $('#start').onclick = draft.edit ? saveEdit : startGame;
-  if (draft.edit) return;
+  const rename = $('[data-rename-input]');
+  if (rename) {
+    let done = false;
+    const commit = (keep) => {
+      if (done) return;
+      done = true;
+      const i = +rename.dataset.renameInput;
+      const name = rename.value.trim().slice(0, 40);
+      const key = name.toLocaleLowerCase();
+      if (keep && name && !draft.players.some((p, j) => j !== i && p.name.toLocaleLowerCase() === key)) {
+        draft.players[i].name = name;
+      } else if (keep && name && name !== draft.players[i].name) {
+        toast(t('new.nameTaken', { name }));
+      }
+      draft.renaming = null;
+      rerenderNew();
+    };
+    rename.onkeydown = (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); commit(true); }
+      if (e.key === 'Escape') { e.preventDefault(); commit(false); }
+    };
+    rename.onblur = () => commit(true);
+  }
 
   const input = $('#pname');
   const list = $('#suggest');
@@ -664,15 +704,33 @@ function wireNew() {
   input.onblur = () => setTimeout(() => { list.hidden = true; }, 150);
 }
 
-function startGame() {
-  if (!draft.players.length || playerProblem(draft.rules, draft.players.length)) return;
+// Whether a player has anything entered in this game.
+function hasScores(gid, pid) {
+  return state().games[gid]?.rounds.some((r) => [r.scores, r.bids, r.tricks].some((m) => m && pid in m)
+    || r.contract?.kurtier === pid || r.contract?.partner === pid);
+}
+
+// Player ids for the draft: new names become players, renamed ones are
+// renamed (for the whole game night).
+function resolvePlayers() {
   const s = state();
-  const pids = draft.players.map((pl) => {
-    if (pl.pid && s.players[pl.pid]) return pl.pid;
+  return draft.players.map((pl) => {
+    if (pl.pid && s.players[pl.pid]) {
+      if (s.players[pl.pid].name !== pl.name) {
+        store.forgetPlayer(s.players[pl.pid].name);
+        live.dispatch({ type: 'renamePlayer', pid: pl.pid, name: pl.name });
+      }
+      return pl.pid;
+    }
     const pid = newId();
     live.dispatch({ type: 'addPlayer', pid, name: pl.name });
     return pid;
   });
+}
+
+function startGame() {
+  if (!draft.players.length || playerProblem(draft.rules, draft.players.length)) return;
+  const pids = resolvePlayers();
   const gid = newId();
   const name = draft.name.trim() || suggestedName(draft.rules);
   live.dispatch({ type: 'newGame', gid, name, rules: draft.rules, players: pids, firstDealer: draft.firstDealer });
@@ -682,8 +740,15 @@ function startGame() {
 }
 
 function saveEdit() {
+  const n = draft.players.length;
+  if (!n || playerProblem(draft.rules, n)) return;
   const gid = draft.edit;
-  live.dispatch({ type: 'updateGame', gid, name: draft.name.trim() || suggestedName(draft.rules), rules: draft.rules });
+  const pids = resolvePlayers();
+  // The marker was "deals now"; store it as the first dealer.
+  const current = summarize(state().games[gid]).current;
+  const firstDealer = (((draft.firstDealer - current) % n) + n) % n;
+  live.dispatch({ type: 'updateGame', gid, name: draft.name.trim() || suggestedName(draft.rules), rules: draft.rules, players: pids, firstDealer });
+  store.rememberPlayers(draft.players.map((pl) => pl.name));
   draft = null;
   location.replace(`#/s/${route.sid}/g/${gid}`);
 }

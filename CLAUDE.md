@@ -70,6 +70,12 @@ don't reuse its names, D1 database or rate-limit namespace (`1001`).
   `disabled`: it's `aria-disabled` and, when tapped, marks what's missing.
   If another device changes the round while the sheet is open
   (`sheetSig`/`checkStale`), saving is blocked until "Oppdater".
+- **Players mid-game:** the edit form (`#/s/:sid/g/:gid/edit`) changes
+  players too (`updateGame.players`); names are tap-to-rename (`renamePlayer`,
+  for the whole session). Its dealer marker means "deals now" and is stored
+  back as `firstDealer`. A player added later scores 0 for earlier rounds (bid
+  rounds without their tricks score 0); a removed player's entries stay in
+  the rounds and count again if they're added back.
 - **Ending:** a game is done when the card sequence runs out, someone
   reaches `target`, or it's ended by hand (`endGame`: the link under the
   last round or the menu). Done games show `resultsHtml()` (podium for the

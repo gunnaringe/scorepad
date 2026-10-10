@@ -833,3 +833,9 @@ body[data-view="dash"] { overflow: hidden; }
 .dash-side .place.rank1 .place-step { height: 3.6em; }
 .dash-side .place.rank2 .place-step { height: 2.7em; }
 .dash-side .place.rank3 .place-step { height: 2em; }
+
+/* Tap-to-rename in the seat list. */
+.seat-name { border: 0; background: none; text-align: left; padding: .4rem .2rem; min-height: 2.75rem; display: inline-flex; align-items: center; gap: .35rem; color: inherit; font: inherit; font-weight: 600; }
+.seat-name .icon { width: .95em; height: .95em; opacity: .35; flex: none; }
+.seat-name:hover .icon { opacity: .7; }
+.seat-input { flex: 1; min-width: 0; font: inherit; font-weight: 600; padding: .45rem .7rem; border-radius: 12px; border: 2px solid var(--accent); background: var(--paper-alt); color: var(--ink); }

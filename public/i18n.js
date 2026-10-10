@@ -47,6 +47,11 @@ export const I18N = {
     'new.add': 'Legg til',
     'new.dealer': 'Giver',
     'new.dealsFirst': 'Gir først',
+    'new.dealsNow': 'Gir denne runden',
+    'new.rename': 'Endre navnet til {name}',
+    'new.nameTaken': '{name} er allerede med.',
+    'new.removeConfirm': 'Fjerne {name}? Det {name} har ført, telles ikke med lenger (det kommer tilbake om {name} legges til igjen).',
+    'new.editPlayersHint': 'Trykk på et navn for å endre det. Nye spillere starter på 0.',
     'new.up': 'Flytt opp',
     'new.down': 'Flytt ned',
     'new.remove': 'Fjern',
@@ -163,12 +168,12 @@ export const I18N = {
     'theme.kontrast': 'Høy kontrast',
 
     'game.untitled': 'Spill',
-    'menu.edit': 'Endre navn og regler',
+    'menu.edit': 'Endre spillere, navn og regler',
 
     'new.presets': 'Ferdige regler',
     'new.customize': 'Tilpass reglene',
     'new.editTitle': 'Endre spill',
-    'new.editHint': 'Endrer du reglene, regnes alle rundene om.',
+    'new.editHint': 'Endrer du reglene eller spillerne, regnes alle rundene om.',
     'new.save': 'Lagre',
 
     'rules.own': 'Egne regler',
@@ -312,6 +317,11 @@ export const I18N = {
     'new.add': 'Add',
     'new.dealer': 'Dealer',
     'new.dealsFirst': 'Deals first',
+    'new.dealsNow': 'Deals this round',
+    'new.rename': 'Rename {name}',
+    'new.nameTaken': '{name} is already playing.',
+    'new.removeConfirm': "Remove {name}? {name}'s scores stop counting (they come back if {name} is added again).",
+    'new.editPlayersHint': 'Tap a name to change it. New players start at 0.',
     'new.up': 'Move up',
     'new.down': 'Move down',
     'new.remove': 'Remove',
@@ -428,12 +438,12 @@ export const I18N = {
     'theme.kontrast': 'High contrast',
 
     'game.untitled': 'Game',
-    'menu.edit': 'Change name and rules',
+    'menu.edit': 'Change players, name and rules',
 
     'new.presets': 'Ready-made rules',
     'new.customize': 'Customize the rules',
     'new.editTitle': 'Edit game',
-    'new.editHint': 'Changing the rules rescores every round.',
+    'new.editHint': 'Changing the rules or players rescores every round.',
     'new.save': 'Save',
 
     'rules.own': 'Own rules',

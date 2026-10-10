@@ -142,3 +142,14 @@ test('two devices starting the same round merge instead of stranding one', () =>
   assert.equal(sum.pending.id, 'fromB');
   assert.equal(sum.cards, 10);
 });
+
+test('players can be added, removed and renamed mid-game', () => {
+  const base = [...players('a', 'b', 'c'), game('selbuvist', ['a', 'b']),
+    round({ id: 'r1', bids: { a: 1, b: 0 }, tricks: { a: 1, b: 0 } })];
+  const g = reduce([...base, { id: 'ev-p', type: 'updateGame', gid: 'g', players: ['a', 'b', 'c'], firstDealer: 2 }]).games.g;
+  assert.deepEqual(summarize(g).totals, { a: 11, b: 10, c: 0 });
+  assert.equal(g.firstDealer, 2);
+  const s2 = reduce([...base, { id: 'ev-r', type: 'renamePlayer', pid: 'a', name: 'Anne' }, { id: 'ev-q', type: 'updateGame', gid: 'g', players: ['a'] }]);
+  assert.equal(s2.players.a.name, 'Anne');
+  assert.deepEqual(summarize(s2.games.g).totals, { a: 11 });
+});
