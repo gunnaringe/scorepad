@@ -845,3 +845,25 @@ body[data-view="dash"] { overflow: hidden; }
 .sharing .qr { width: min(100%, 220px); margin: 0 auto; border-radius: 12px; box-shadow: 0 0 0 1px var(--line); }
 .sharing .btn.primary { align-self: flex-start; }
 .link.center { display: block; text-align: center; }
+
+/* --- Confirm dialog, overrides, pick lists ------------------------------------------ */
+
+.ask { width: min(380px, calc(100% - 2rem)); }
+.ask-inner { gap: 1.2rem; padding: 1.4rem 1.3rem 1.2rem; }
+.ask-msg { font-size: 1.08rem; line-height: 1.45; color: var(--ink); }
+.ask-actions { display: grid; grid-template-columns: 1fr 1fr; gap: .6rem; }
+.ask-actions .btn { width: 100%; }
+.btn.danger-fill { background: var(--miss); color: #fff; }
+[data-theme="mork"] .btn.danger-fill { color: #1a0d0a; }
+[data-theme="kontrast"] .btn.danger-fill { background: #ff8c8c; color: #000; }
+.ask[open] { animation: pop .16s ease-out; }
+@keyframes pop { from { transform: scale(.94); } }
+
+.override { margin-top: 1rem; border-top: 1px dashed var(--line); padding-top: .6rem; }
+.override summary { cursor: pointer; font-weight: 600; color: var(--accent); min-height: 2.75rem; display: flex; align-items: center; }
+.override > p { margin: .2rem 0 .5rem; }
+.override-row .num { width: 5.5rem; flex: none; }
+.ovr-mark { font-size: .6em; color: var(--accent); margin-left: .15em; vertical-align: super; }
+.chip-note { margin-top: .3rem; }
+select.num.select { appearance: auto; min-width: 5.5rem; font-size: 1rem; text-align: left; min-height: 2.75rem; }
+.conn { gap: .3rem; }

@@ -81,12 +81,17 @@ don't reuse its names, D1 database or rate-limit namespace (`1001`).
   last round or the menu). Done games show `resultsHtml()` (podium for the
   top three, ties share a medal, then the rest) instead of the table, with a
   Tabell/Resultat toggle; the big screen shows the same podium.
-- **Sharing lives in Settings** (`refreshSharing()`, the first section when
-  a game night is open): share button, QR, code, link, connection status,
-  devices, leave. The bar's `.chip-slot` shows a share button (unshared) or
-  the code (shared); both open that section. No separate share dialog.
-- **Devices aren't players.** Connections are listed only in that section. The dashboard is a view mode (`#/s/:sid/dash`, or
-  `/s/CODE?view=dashboard` from a link), not a role.
+- **Sharing:** the bar's `.chip-slot` is a share button (unshared) or the
+  code chip (shared); both open the share dialog (`renderShare()`: share, or
+  QR, code and link — nothing else). Connections (status, devices, leave) are
+  only in Settings (`refreshConnection()`), for a shared game night.
+- **Devices aren't players.** The big screen is a view mode
+  (`#/s/:sid/dash`, or `/s/CODE?view=dashboard` from a link), not a role.
+- **Overrides:** a scored round can carry `override: { pid: points }`
+  ("Overstyr poeng" in the sheet); `scoreRound()` applies it on top of
+  `computeRound()`. Undo strips it with the tricks.
+- **Confirmations** use `ask()` (the `#ask` dialog), never `confirm()` or
+  `prompt()`.
 - **Routes:** hash-based (`#/s/:sid/g/:gid`). `/s/CODE` reaches `index.html`
   through the SPA fallback; `boot()` joins and swaps to the hash route.
 - **i18n:** `I18N.no` / `I18N.en`, same keys (a test checks). `t()` returns

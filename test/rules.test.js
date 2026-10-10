@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { reduce } from '../public/core.js';
-import { scoreRound, summarize, cardsFor, bidBalance, tricksTotal, presetRules, matchPreset, playerProblem, sanitizeRules } from '../public/rules.js';
+import { scoreRound, computeRound, minBid, summarize, cardsFor, bidBalance, tricksTotal, presetRules, matchPreset, playerProblem, sanitizeRules } from '../public/rules.js';
 
 const players = (...names) => names.map((n) => ({ id: `ev-${n}`, type: 'addPlayer', pid: n, name: n.toUpperCase() }));
 const game = (preset, pids, rules = {}, extra = {}) => ({ id: 'ev-g', type: 'newGame', gid: 'g', name: preset, rules: { ...presetRules(preset), ...rules }, players: pids, at: 1, ...extra });
@@ -55,13 +55,26 @@ test('amerikaner: failed contract is -bid, or 0 as house rule', () => {
   assert.deepEqual(scoreRound(g2, g2.rounds[0]), { a: 0, b: 3, c: 0, d: 2 });
 });
 
-test('amerikaner: amerikaneren scores the target, reaching it ends the game', () => {
+test('amerikaner: taking every trick alone is just the top bid; minimum bid', () => {
   const s = reduce([...players('a', 'b', 'c', 'd'), game('amerikaner', ['a', 'b', 'c', 'd']),
     round({ id: 'r1', contract: { kurtier: 'a', partner: null, bid: 13 }, tricks: { b: 0, c: 0, d: 0 } })]);
-  const sum = summarize(s.games.g);
-  assert.equal(sum.totals.a, 52);
-  assert.equal(sum.done, true);
-  assert.deepEqual(sum.winners, ['a']);
+  const g = s.games.g;
+  assert.equal(summarize(g).totals.a, 13);
+  assert.equal(summarize(g).done, false);
+  assert.equal(minBid(g, 0), 1);
+  const g2 = reduce([...players('a', 'b', 'c', 'd'), game('amerikaner', ['a', 'b', 'c', 'd'], { minBid: 7 })]).games.g;
+  assert.equal(minBid(g2, 0), 7);
+  const g3 = reduce([...players('a', 'b', 'c', 'd'), game('amerikaner', ['a', 'b', 'c', 'd'], { minBid: 40 })]).games.g;
+  assert.equal(minBid(g3, 0), 13);
+});
+
+test('overridden scores replace the computed ones, and only for those players', () => {
+  const s = reduce([...players('a', 'b'), game('selbuvist', ['a', 'b']),
+    round({ id: 'r1', bids: { a: 1, b: 0 }, tricks: { a: 1, b: 0 }, override: { b: -5, ghost: 9 } })]);
+  const g = s.games.g;
+  assert.deepEqual(g.rounds[0].override, { b: -5 });
+  assert.deepEqual(computeRound(g, g.rounds[0]), { a: 11, b: 10 });
+  assert.deepEqual(summarize(g).totals, { a: 11, b: -5 });
 });
 
 test('editing and deleting an old round recalculates totals', () => {

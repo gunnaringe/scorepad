@@ -46,6 +46,8 @@ function sanitizeRound(raw, game) {
   if (bids) round.bids = bids;
   if (tricks) round.tricks = tricks;
   if (scores) round.scores = scores;
+  const override = numberMap(raw.override, game.players);
+  if (override && Object.keys(override).length) round.override = override;
   const c = raw.contract;
   if (c && typeof c === 'object' && game.players.includes(c.kurtier)) {
     round.contract = {

@@ -59,7 +59,7 @@ const addPlayers = async (p, names) => { for (const n of names) { await p.fill('
   await p.screenshot({ path: '/tmp/shots/am-contract.png' });
   await p.click('#sheet-save');
   await p.click('#primary');
-  const rows = await p.$$('#sheet .entry');
+  const rows = await p.$$('#sheet .entry[data-row]');
   await rows[0].$$eval('.nchip', (cs) => cs[3].click());
   await rows[1].$$eval('.nchip', (cs) => cs[2].click());
   await p.screenshot({ path: '/tmp/shots/am-tricks.png' });
@@ -75,8 +75,8 @@ const addPlayers = async (p, names) => { for (const n of names) { await p.fill('
   await A.p.click('#new-game');
   await addPlayers(A.p, ['Kari', 'Ola', 'Per']);
   await A.p.click('#start');
-  // The share button in the game bar opens sharing in Settings.
-  await A.p.click('.chip-slot [data-act="sharing"]');
+  // The share button in the game bar.
+  await A.p.click('.chip-slot [data-act="share"]');
   await A.p.click('#do-share');
   await A.p.waitForSelector('.big-code');
   const code = await A.p.textContent('.big-code');
@@ -86,11 +86,11 @@ const addPlayers = async (p, names) => { for (const n of names) { await p.fill('
   await B.p.waitForSelector('.board', { timeout: 15000 });
   // A enters bids; B's dashboard should show them.
   await A.p.click('#primary');
-  for (const row of await A.p.$$('#sheet .entry')) await row.$$eval('.nchip', (cs) => cs[0].click());
+  for (const row of await A.p.$$('#sheet .entry[data-row]')) await row.$$eval('.nchip', (cs) => cs[0].click());
   await A.p.click('#sheet-save');
   await B.p.waitForSelector('.board .pill', { timeout: 10000 });
   await A.p.click('#primary');
-  const rows = await A.p.$$('#sheet .entry');
+  const rows = await A.p.$$('#sheet .entry[data-row]');
   for (let i = 0; i < rows.length; i++) await rows[i].$$eval('.nchip', (cs, v) => cs[v].click(), i === 0 ? 10 : 0);
   await A.p.click('#sheet-save');
   await B.p.waitForFunction(() => document.querySelector('.board .d-total')?.textContent === '10', null, { timeout: 10000 });
@@ -102,7 +102,7 @@ const addPlayers = async (p, names) => { for (const n of names) { await p.fill('
   await B.ctx.setOffline(true);
   await B.p.waitForTimeout(500);
   await B.p.click('#primary');
-  for (const row of await B.p.$$('#sheet .entry')) await row.$$eval('.nchip', (cs) => cs[1].click());
+  for (const row of await B.p.$$('#sheet .entry[data-row]')) await row.$$eval('.nchip', (cs) => cs[1].click());
   await B.p.click('#sheet-save');
   const pendingCount = await B.p.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith('scorepad-session-v1-')).map((k) => JSON.parse(localStorage[k]).pending.length));
   console.log('B pending while offline', pendingCount);

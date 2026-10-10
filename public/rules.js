@@ -28,10 +28,10 @@ export const DEFAULT_RULES = {
   fail: 'minus',
   doubleKurtier: false,
   halfPartner: false,
-  minHalf: false,
+  // Lowest allowed bid in tricks (0 = no minimum). The highest is taking
+  // every trick, which you do alone.
+  minBid: 0,
   othersPerTrick: 1,
-  // Taking every trick scores the target, i.e. wins outright.
-  allTricksWins: true,
   // End: when the card sequence runs out, when someone reaches `target`
   // (0 = no target), or when the game is ended by hand.
   target: 0,
@@ -51,7 +51,7 @@ const CHOICES = {
   cards: ['none', 'updown', 'downup', 'fixed', 'deck'],
   fail: ['minus', 'zero'],
 };
-const RANGES = { maxCards: [1, 52], target: [0, 100000] };
+const RANGES = { maxCards: [1, 52], minBid: [0, 52], target: [0, 100000] };
 
 export const presetRules = (id) => ({ ...DEFAULT_RULES, ...PRESETS[id] });
 
@@ -169,11 +169,21 @@ export function teamTricks(game, round, i) {
 export function minBid(game, i) {
   const r = rulesOf(game);
   if (r.entry !== 'contract') return 0;
-  return r.minHalf ? Math.ceil(tricksTotal(game, i) / 2) : 1;
+  return Math.min(tricksTotal(game, i), Math.max(1, r.minBid));
 }
 
-// Scores for round i, { pid: points }, or null if it isn't complete.
+// Scores for round i, { pid: points }, or null if it isn't complete. A
+// round's `override` replaces the computed score for those players.
 export function scoreRound(game, round, i = game.rounds.indexOf(round)) {
+  const out = computeRound(game, round, i);
+  if (out && round.override) {
+    for (const pid of game.players) if (Number.isInteger(round.override[pid])) out[pid] = round.override[pid];
+  }
+  return out;
+}
+
+// The scores the rules give, before any override.
+export function computeRound(game, round, i = game.rounds.indexOf(round)) {
   if (!isComplete(game, round)) return null;
   const r = rulesOf(game);
   const out = {};
@@ -196,8 +206,7 @@ export function scoreRound(game, round, i = game.rounds.indexOf(round)) {
     const made = teamTricks(game, round, i) >= bid;
     const team = made ? bid : r.fail === 'zero' ? 0 : -bid;
     for (const pid of game.players) out[pid] = (round.tricks[pid] ?? 0) * r.othersPerTrick;
-    const all = made && bid >= tricksTotal(game, i);
-    out[kurtier] = all && r.allTricksWins && r.target > 0 ? r.target : r.doubleKurtier ? team * 2 : team;
+    out[kurtier] = r.doubleKurtier ? team * 2 : team;
     if (partner && partner !== kurtier) out[partner] = r.halfPartner ? Math.trunc(team / 2) : team;
   }
   return out;

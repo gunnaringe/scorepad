@@ -12,7 +12,7 @@
 
 import {
   DEFAULT_RULES, PRESET_IDS, presetRules, rulesOf, matchPreset, sanitizeRules, playerProblem,
-  summarize, cardsFor, tricksTotal, teamTricks, minBid, scoreRound, bidBalance, dealerFor,
+  summarize, cardsFor, tricksTotal, teamTricks, minBid, scoreRound, computeRound, bidBalance, dealerFor,
 } from './rules.js';
 import { newId, reduce } from './core.js';
 import * as store from './store.js';
@@ -110,8 +110,8 @@ const shareUrl = (code) => `${location.origin}/s/${code}`;
 // in a .chip-slot, so sharing later swaps it.
 function statusChip() {
   if (!live) return '';
-  if (!live.shared) return `<button type="button" class="icon-btn" data-act="sharing" data-i18n-title="share.title" title="${tt('share.title')}" aria-label="${tt('share.title')}">${icon('qr')}</button>`;
-  return `<button type="button" class="status-chip status-${live.status}" data-act="sharing" title="${tt(`status.${live.status}`)}"><span class="dot"></span>${esc(live.rec.code)}</button>`;
+  if (!live.shared) return `<button type="button" class="icon-btn" data-act="share" title="${tt('share.title')}" aria-label="${tt('share.title')}">${icon('qr')}</button>`;
+  return `<button type="button" class="status-chip status-${live.status}" data-act="share" title="${tt(`status.${live.status}`)}"><span class="dot"></span>${esc(live.rec.code)}</button>`;
 }
 const chipSlot = () => `<span class="chip-slot">${statusChip()}</span>`;
 
@@ -175,7 +175,8 @@ function onLive(what) {
   }
   if (what === 'state' && form && sheet.open) checkStale();
   for (const el of $$('.chip-slot')) el.innerHTML = statusChip();
-  if (dlg.open && dlg.dataset.kind === 'settings') refreshSharing();
+  if (dlg.open && dlg.dataset.kind === 'settings') refreshConnection();
+  if (dlg.open && dlg.dataset.kind === 'share' && what !== 'devices') renderShare();
 }
 
 function render() {
@@ -201,7 +202,7 @@ addEventListener('hashchange', render);
 // Clicks on [data-act] anywhere in the view.
 const actions = {
   settings: () => openSettings(),
-  sharing: () => openSettings('sharing'),
+  share: () => openShare(),
 };
 document.addEventListener('click', (e) => {
   const el = e.target.closest('[data-act]');
@@ -352,8 +353,8 @@ function renderSession() {
       </div>
     </main>`;
   applyI18n(view);
-  $('#delete-session').onclick = () => {
-    if (!confirm(t('session.deleteConfirm'))) return;
+  $('#delete-session').onclick = async () => {
+    if (!(await ask(t('session.deleteConfirm'), { ok: t('ask.delete'), danger: true }))) return;
     const id = live.rec.id;
     live.close();
     live = null;
@@ -426,8 +427,7 @@ function rulesSummary(r) {
     lines.push(t('sum.made') + (r.doubleKurtier ? ` ${t('sum.double')}` : '') + (r.halfPartner ? ` ${t('sum.half')}` : ''));
     lines.push(t(r.fail === 'zero' ? 'sum.fail0' : 'sum.failMinus'));
     lines.push(t('sum.others', { n: r.othersPerTrick }));
-    if (r.minHalf) lines.push(t('sum.minHalf'));
-    if (r.allTricksWins && r.target > 0) lines.push(t('sum.allTricks', { n: r.target }));
+    if (r.minBid > 1) lines.push(t('sum.minBid', { n: r.minBid }));
   }
   if (r.target > 0) lines.push(t('sum.target', { n: r.target }));
   lines.push(t(r.lowWins ? 'sum.low' : 'sum.high'));
@@ -443,6 +443,7 @@ function compactSummary(r) {
     parts.push(r.missPerTrick ? t('cs.missPer', { n: r.missPerTrick }) : t('cs.miss0'));
   }
   if (r.entry === 'contract') parts.push(t(r.fail === 'zero' ? 'cs.fail0' : 'cs.failMinus'));
+  if (r.entry === 'contract' && r.minBid > 1) parts.push(t('cs.minBid', { n: r.minBid }));
   if (r.target > 0) parts.push(t('cs.target', { n: r.target }));
   if (r.lowWins) parts.push(t('cs.low'));
   return parts.join(' · ');
@@ -461,6 +462,11 @@ function ruleField(key) {
   if (typeof def === 'boolean') {
     return `<label class="switch-row"><span>${label}${hint}</span><input type="checkbox" class="switch" data-rule="${key}"${r[key] ? ' checked' : ''}></label>`;
   }
+  if (key === 'minBid') {
+    // A pick list: nothing, or 1–13 tricks (capped by the deal in play).
+    const opts = Array.from({ length: 14 }, (_, n) => `<option value="${n}"${r.minBid === n ? ' selected' : ''}>${n ? n : tt('rule.minBid.none')}</option>`).join('');
+    return `<label class="field-row"><span>${label}${hint}</span><select class="num select" data-rule="minBid">${opts}</select></label>`;
+  }
   if (typeof def === 'number') {
     return `<label class="field-row"><span>${label}${hint}</span><input type="number" inputmode="numeric" class="num" data-rule="${key}" value="${r[key]}"></label>`;
   }
@@ -476,7 +482,7 @@ function ruleFields() {
     groups.push(['cards', ...(['updown', 'downup', 'fixed'].includes(r.cards) ? ['maxCards'] : [])]);
   }
   if (r.entry === 'bids') groups.push(['hitBase', 'hitPerTrick', 'missPerTrick', 'trickPoints']);
-  if (r.entry === 'contract') groups.push(['fail', 'othersPerTrick', 'doubleKurtier', 'halfPartner', 'minHalf', 'allTricksWins']);
+  if (r.entry === 'contract') groups.push(['fail', 'othersPerTrick', 'doubleKurtier', 'halfPartner', 'minBid']);
   groups.push(['target', 'lowWins']);
   return groups.map((keys) => `<div class="rule-group">${keys.map(ruleField).join('')}</div>`).join('');
 }
@@ -594,7 +600,7 @@ function wireNew() {
     $('#pname')?.focus();
   };
   $('#gname').oninput = (e) => { draft.name = e.target.value; };
-  view.onclick = (e) => {
+  view.onclick = async (e) => {
     const b = e.target.closest('button');
     if (!b) return;
     if (b.dataset.preset) {
@@ -612,7 +618,8 @@ function wireNew() {
     } else if (b.dataset.remove) {
       const i = +b.dataset.remove;
       const pl = draft.players[i];
-      if (draft.edit && pl.pid && hasScores(draft.edit, pl.pid) && !confirm(t('new.removeConfirm', { name: pl.name }))) return;
+      if (draft.edit && pl.pid && hasScores(draft.edit, pl.pid)
+        && !(await ask(t('new.removeConfirm', { name: pl.name }), { ok: t('ask.remove'), danger: true }))) return;
       draft.players.splice(i, 1);
       if (draft.firstDealer >= draft.players.length) draft.firstDealer = 0;
       rerenderNew();
@@ -769,7 +776,8 @@ function cellHtml(game, row, pid) {
   const v = row.scores[pid] ?? 0;
   let cls = v < 0 ? 'neg' : '';
   if (r.bids && r.tricks) cls += r.bids[pid] === r.tricks[pid] ? ' hit' : ' miss';
-  return `<td class="${cls}"><span class="v">${fmt(v)}</span>${sub ? `<span class="sub">${sub}</span>` : ''}</td>`;
+  const ovr = Number.isInteger(r.override?.[pid]) ? `<span class="ovr-mark" title="${tt('table.overridden')}" aria-label="${tt('table.overridden')}">✎</span>` : '';
+  return `<td class="${cls}"><span class="v">${fmt(v)}${ovr}</span>${sub ? `<span class="sub">${sub}</span>` : ''}</td>`;
 }
 
 function tableHtml(game, sum, { interactive = true } = {}) {
@@ -944,8 +952,8 @@ function updateGame(first = false) {
   $('#undo')?.addEventListener('click', undo);
 }
 
-function endGame(game) {
-  if (!confirm(t('menu.endConfirm'))) return;
+async function endGame(game) {
+  if (!(await ask(t('menu.endConfirm'), { ok: t('ask.end') }))) return;
   showTable[game.id] = false;
   live.dispatch({ type: 'endGame', gid: game.id, ended: true });
 }
@@ -957,7 +965,7 @@ function undo() {
   const scored = !!scoreRound(game, last);
   if (scored && entryOf(game) !== 'scores') {
     // Back to "bids/contract entered, waiting for tricks".
-    const { tricks, ...rest } = last;
+    const { tricks, override, ...rest } = last;
     live.dispatch({ type: 'putRound', gid: game.id, round: rest });
   } else {
     live.dispatch({ type: 'deleteRound', gid: game.id, rid: last.id });
@@ -984,9 +992,9 @@ const loadSheetDraft = () => {
 const clearSheetDraft = () => localStorage.removeItem(SHEET_DRAFT);
 function saveSheetDraft() {
   if (!form?.dirty) return;
-  const { req, gid, rid, index, editing, mode, tab, scores, bids, tricks, contract, raw } = form;
+  const { req, gid, rid, index, editing, mode, tab, scores, bids, tricks, contract, raw, override, overrideRaw } = form;
   try {
-    localStorage.setItem(SHEET_DRAFT, JSON.stringify({ sid: route.sid, req, gid, rid, index, editing, mode, tab, scores, bids, tricks, contract, raw }));
+    localStorage.setItem(SHEET_DRAFT, JSON.stringify({ sid: route.sid, req, gid, rid, index, editing, mode, tab, scores, bids, tricks, contract, raw, override, overrideRaw }));
   } catch {
     // Storage full: the sheet still works, it just won't survive a reload.
   }
@@ -1021,6 +1029,8 @@ function openRound(req, rid) {
     bids: { ...round?.bids },
     tricks: { ...round?.tricks },
     contract: round?.contract ? { ...round.contract } : { kurtier: null, partner: undefined, bid: null },
+    override: { ...round?.override },
+    overrideRaw: {},
     raw: {}, // Fritt: text as typed, to keep invalid input visible
     touched: {},
     dirty: false,
@@ -1029,7 +1039,10 @@ function openRound(req, rid) {
   };
   const saved = loadSheetDraft();
   if (saved && saved.gid === game.id && saved.req === req && (rid ? saved.rid === rid : !saved.editing && saved.index === index)) {
-    Object.assign(form, { mode: saved.mode, tab: saved.tab, scores: saved.scores, bids: saved.bids, tricks: saved.tricks, contract: saved.contract, raw: saved.raw ?? {}, dirty: true });
+    Object.assign(form, {
+      mode: saved.mode, tab: saved.tab, scores: saved.scores, bids: saved.bids, tricks: saved.tricks, contract: saved.contract,
+      raw: saved.raw ?? {}, override: saved.override ?? {}, overrideRaw: saved.overrideRaw ?? {}, dirty: true,
+    });
     if (!rid) form.rid = round?.id ?? saved.rid;
   } else if (saved && saved.gid === game.id) {
     clearSheetDraft();
@@ -1121,8 +1134,10 @@ function sheetSections(game) {
     const c = f.contract;
     out.push(`<h3>${tt('am.kurtier')}</h3><div class="pchips" role="group" aria-label="${tt('am.kurtier')}">${order.map((pid) =>
       `<button type="button" class="pchip${c.kurtier === pid ? ' on' : ''}" data-g="kurtier" data-pid="${pid}" ${pressed(c.kurtier === pid)}>${esc(pname(pid))}</button>`).join('')}</div>`);
-    out.push(`<h3>${tt('am.bid')}</h3>${chipRow('bid', '', minBid(game, f.index), total, c.bid, t('am.bid'))}`);
-    if (c.kurtier) {
+    out.push(`<h3>${tt('am.bid')}</h3>${chipRow('bid', '', minBid(game, f.index), total, c.bid, t('am.bid'))}<p class="muted small chip-note">${tt('am.allHint', { n: total })}</p>`);
+    if (c.kurtier && c.bid === total) {
+      out.push(`<h3>${tt('am.partner')}</h3><p class="contract-line">${tt('am.allAlone')}</p>`);
+    } else if (c.kurtier) {
       out.push(`<h3>${tt('am.partner')}</h3><div class="pchips" role="group" aria-label="${tt('am.partner')}">${order.filter((pid) => pid !== c.kurtier).map((pid) =>
         `<button type="button" class="pchip${c.partner === pid ? ' on' : ''}" data-g="partner" data-pid="${pid}" ${pressed(c.partner === pid)}>${esc(pname(pid))}</button>`).join('')}
         <button type="button" class="pchip${c.partner === null ? ' on' : ''}" data-g="partner" data-pid="" ${pressed(c.partner === null)}>${tt('am.alone')}</button></div>`);
@@ -1137,6 +1152,20 @@ function sheetSections(game) {
       out.push(`<h3>${tt('am.othersTricks')}</h3><div class="entry-list">${order.filter((pid) => pid !== c.kurtier && pid !== c.partner).map((pid) => `
         <div class="entry col" data-row="${pid}">${nameCell(pid)}${chipRow('tricks', pid, 0, total, f.tricks[pid], `${pname(pid)}: ${t('sheet.tricks')}`)}</div>`).join('')}</div>`);
     }
+  }
+  // Any scored round can be overridden per player.
+  const scored = ['tricks', 'atricks'].includes(f.mode) || (both && f.tab === 'second');
+  if (scored) {
+    const open = Object.keys(f.override).length || Object.keys(f.overrideRaw).length || f.overrideOpen;
+    out.push(`<details class="override"${open ? ' open' : ''}>
+      <summary>${tt('sheet.override')}</summary>
+      <p class="muted small">${tt('sheet.overrideHint')}</p>
+      <div class="entry-list">${order.map((pid) => `
+        <label class="entry override-row" data-orow="${pid}">
+          <span class="pl"><span class="pl-name">${esc(pname(pid))}</span><span class="tot" data-calc="${pid}"></span></span>
+          <input type="text" inputmode="numeric" autocomplete="off" class="num${f.overrideRaw[pid] != null && parseScore(f.overrideRaw[pid]).invalid ? ' invalid' : ''}" data-override="${pid}" value="${esc(f.overrideRaw[pid] ?? f.override[pid] ?? '')}">
+        </label>`).join('')}</div>
+    </details>`);
   }
   return out.join('');
 }
@@ -1238,6 +1267,11 @@ function checkForm(game) {
       }
     }
   }
+  const badOverride = order.filter((pid) => f.overrideRaw[pid] != null && parseScore(f.overrideRaw[pid]).invalid);
+  if (badOverride.length) {
+    ok = false;
+    lines.push(`<span class="warn">${tt('sheet.invalid', { names: names(badOverride) })}</span>`);
+  }
   if (f.stale) {
     ok = false;
     lines.unshift(`<span class="warn">${tt('sheet.stale')}</span> <button type="button" class="link inline" id="sheet-refresh">${tt('sheet.refresh')}</button>`);
@@ -1259,6 +1293,10 @@ function formRound(game) {
     const c = f.contract;
     r.tricks = Object.fromEntries(game.players.filter((pid) => pid !== c.kurtier && pid !== c.partner).map((pid) => [pid, f.tricks[pid]]));
   }
+  if (f.mode.includes('tricks')) {
+    const override = Object.fromEntries(Object.entries(f.override).filter(([pid, v]) => Number.isInteger(v) && game.players.includes(pid)));
+    if (Object.keys(override).length) r.override = override;
+  }
   return r;
 }
 
@@ -1279,9 +1317,22 @@ function refreshSheet() {
   if (form.mode === 'tricks' || form.mode === 'bids+tricks') {
     for (const el of $$('[data-preview]', sheet)) {
       const pid = el.dataset.preview;
-      const v = Number.isInteger(form.tricks[pid]) && Number.isInteger(form.bids[pid]) ? scoreRoundOne(game, pid) : null;
+      const v = Number.isInteger(form.override[pid]) ? form.override[pid]
+        : Number.isInteger(form.tricks[pid]) && Number.isInteger(form.bids[pid]) ? scoreRoundOne(game, pid) : null;
       el.textContent = v != null ? ` → ${signed(v)}` : '';
       el.className = `preview${v > 0 ? ' pos' : v < 0 ? ' neg' : ''}`;
+    }
+  }
+  if ($('.override', sheet)) {
+    let calc = null;
+    try {
+      calc = computeRound(game, { ...formRound(game), override: undefined }, form.index);
+    } catch {
+      // Incomplete.
+    }
+    for (const el of $$('[data-calc]', sheet)) {
+      const v = calc?.[el.dataset.calc];
+      el.textContent = Number.isInteger(v) ? tt('sheet.calc', { n: fmt(v) }) : '';
     }
   }
   saveSheetDraft();
@@ -1321,6 +1372,7 @@ function renderSheet() {
     </form>`;
   applyI18n(sheet);
   $('.sheet-body', sheet).scrollTop = bodyScroll;
+  $('.override', sheet)?.addEventListener('toggle', (e) => { if (form) form.overrideOpen = e.target.open; });
   refreshSheet();
 }
 
@@ -1353,8 +1405,8 @@ function refreshStale() {
 }
 
 // Closes the sheet; asks first if that would throw away entered values.
-function requestClose() {
-  if (form?.dirty && !confirm(t('sheet.discard'))) return;
+async function requestClose() {
+  if (form?.dirty && !(await ask(t('sheet.discard'), { ok: t('ask.discard'), danger: true }))) return;
   closeSheet(true);
 }
 
@@ -1370,7 +1422,7 @@ sheet.addEventListener('cancel', (e) => {
   requestClose();
 });
 
-sheet.addEventListener('click', (e) => {
+sheet.addEventListener('click', async (e) => {
   // The backdrop only closes an untouched sheet: a stray tap with a drink in
   // the other hand mustn't lose a round.
   if (e.target === sheet) {
@@ -1382,8 +1434,8 @@ sheet.addEventListener('click', (e) => {
   if (b.id === 'sheet-close') return requestClose();
   if (b.id === 'sheet-refresh') return refreshStale();
   if (b.id === 'sheet-delete') {
-    if (!confirm(t('sheet.deleteConfirm'))) return;
     const { gid, rid } = form;
+    if (!(await ask(t('sheet.deleteConfirm'), { ok: t('ask.delete'), danger: true }))) return;
     closeSheet(true);
     live.dispatch({ type: 'deleteRound', gid, rid });
     return;
@@ -1413,7 +1465,12 @@ sheet.addEventListener('click', (e) => {
     if (g === 'bids' || g === 'tricks') {
       form[g][pid] = v;
       form.touched[pid] = true;
-    } else if (g === 'bid') form.contract.bid = v;
+    } else if (g === 'bid') {
+      form.contract.bid = v;
+      // The top bid is every trick, which you take alone.
+      if (v === tricksTotal(state().games[form.gid], form.index)) form.contract.partner = null;
+      return renderSheet();
+    }
     else if (g === 'kurtier') {
       form.contract.kurtier = pid;
       if (form.contract.partner === pid) form.contract.partner = undefined;
@@ -1479,6 +1536,19 @@ function advance(b, g) {
 }
 
 sheet.addEventListener('input', (e) => {
+  const opid = e.target.dataset.override;
+  if (opid) {
+    const p = parseScore(e.target.value);
+    form.overrideRaw[opid] = e.target.value;
+    if (p.empty) {
+      delete form.override[opid];
+      delete form.overrideRaw[opid];
+    } else form.override[opid] = p.value;
+    e.target.classList.toggle('invalid', !!p.invalid);
+    form.dirty = true;
+    refreshSheet();
+    return;
+  }
   const pid = e.target.dataset.score;
   if (!pid) return;
   const p = parseScore(e.target.value);
@@ -1576,35 +1646,81 @@ function openGameMenu() {
       else endGame(game);
     };
     $('#m-settings').onclick = () => openSettings();
-    $('#m-delete').onclick = () => {
-      if (!confirm(t('menu.deleteConfirm'))) return;
-      live.dispatch({ type: 'deleteGame', gid: game.id });
+    $('#m-delete').onclick = async () => {
       dlg.close();
+      if (!(await ask(t('menu.deleteConfirm'), { ok: t('ask.delete'), danger: true }))) return;
+      live.dispatch({ type: 'deleteGame', gid: game.id });
       go(`#/s/${route.sid}`);
     };
   });
 }
 
-// --- Sharing (lives in Settings) -------------------------------------------------------
+// --- Share ---------------------------------------------------------------------------
+//
+// The share button just shares: QR code, code and link. Connections are in
+// Settings.
+
+function openShare() {
+  if (!live) return;
+  dlg.dataset.kind = 'share';
+  renderShare();
+  if (!dlg.open) dlg.showModal();
+}
+
+function renderShare() {
+  const head = `<header class="dlg-head"><h2>${tt('share.title')}</h2><button type="button" class="icon-btn" data-close data-i18n-title="nav.close">${icon('x')}</button></header>`;
+  if (!live.shared) {
+    dlg.innerHTML = `<div class="dlg-inner">${head}
+      ${live.rec.expired ? `<p class="notice">${tt('session.expired')}</p>` : `<p>${tt('share.intro')}</p>`}
+      <button type="button" class="btn primary big" id="do-share">${icon('qr')}${tt(live.rec.expired ? 'share.again' : 'share.start')}</button>
+      <p class="muted small">${tt('share.expiry')}</p>
+    </div>`;
+    labelDialog();
+    applyI18n(dlg);
+    $('#do-share').onclick = async (e) => {
+      e.currentTarget.disabled = true;
+      try {
+        await live.share();
+      } catch {
+        toast(t('share.failed'));
+      }
+      renderShare();
+    };
+    return;
+  }
+  const url = shareUrl(live.rec.code);
+  dlg.innerHTML = `<div class="dlg-inner share">${head}
+    ${qrSvg(url)}
+    <p class="big-code">${esc(live.rec.code)}</p>
+    <p class="muted center small">${esc(url.replace(/^https?:\/\//, ''))}</p>
+    <div class="row wrap center">
+      <button type="button" class="btn" id="copy-link">${icon('copy')}${tt('share.copy')}</button>
+      ${navigator.share ? `<button type="button" class="btn" id="native-share">${icon('share')}${tt('share.native')}</button>` : ''}
+    </div>
+    <p class="muted center small">${tt('share.expiry')}</p>
+  </div>`;
+  labelDialog();
+  applyI18n(dlg);
+  $('#copy-link').onclick = () => copyLink(url);
+  $('#native-share')?.addEventListener('click', () => navigator.share({ title: t('app.name'), url }).catch(() => {}));
+}
 
 async function copyLink(url) {
   try {
     await navigator.clipboard.writeText(url);
     toast(t('share.copied'));
   } catch {
-    prompt(t('share.copy'), url);
+    toast(url);
   }
 }
 
 // --- Settings --------------------------------------------------------------------------
 
-// focus: 'sharing' scrolls to the sharing section (from the code chip).
-function openSettings(focus) {
+function openSettings() {
   const themes = ['hytte', 'cozy', 'lys', 'mork', 'kontrast'];
   const recent = store.recentPlayers();
   openDialog('settings', `
     <header class="dlg-head"><h2>${tt('settings.title')}</h2><button type="button" class="icon-btn" data-close data-i18n-title="nav.close">${icon('x')}</button></header>
-    <section id="sharing" class="sharing" hidden></section>
     <section>
       <h3>${tt('settings.lang')}</h3>
       <div class="segmented" role="group" aria-label="${tt('settings.lang')}">${['auto', 'no', 'en'].map((l) => `<button type="button" data-lang="${l}" class="${settings.lang === l ? 'on' : ''}" ${pressed(settings.lang === l)}>${tt(`settings.lang.${l}`)}</button>`).join('')}</div>
@@ -1616,25 +1732,16 @@ function openSettings(focus) {
     <section>
       <label class="switch-row"><span>${tt('settings.wake')}</span><input type="checkbox" class="switch" id="wake"${settings.wake ? ' checked' : ''}></label>
     </section>
-    <section>
-      <h3>${tt('settings.data')}</h3>
-      <div class="row wrap">
-        ${live ? `<button type="button" class="btn" id="export">${icon('download')}${tt('settings.export')}</button>` : ''}
-        <label class="btn">${icon('upload')}${tt('settings.import')}<input type="file" accept="application/json,.json" id="import" hidden></label>
-      </div>
-    </section>
+    <section id="conn" class="conn" hidden></section>
     ${recent.length ? `<section>
       <h3>${tt('settings.recent')}</h3>
       <div class="chips">${recent.map((p) => `<button type="button" class="chip removable" data-forget="${esc(p.name)}" aria-label="${tt('settings.forget', { name: p.name })}">${esc(p.name)} ${icon('x')}</button>`).join('')}</div>
     </section>` : ''}
     <p class="muted small center">${tt('settings.about')}</p>`, () => {
-    refreshSharing();
-    if (focus === 'sharing') $('#sharing', dlg)?.scrollIntoView({ block: 'start' });
+    refreshConnection();
     for (const b of $$('[data-lang]', dlg)) b.onclick = () => { settings.lang = b.dataset.lang; saveAndApply(); openSettings(); render(); };
     for (const b of $$('[data-theme-pick]', dlg)) b.onclick = () => { settings.theme = b.dataset.themePick; saveAndApply(); openSettings(); };
     $('#wake').onchange = (e) => { settings.wake = e.target.checked; saveAndApply(); updateWake(); };
-    $('#export')?.addEventListener('click', exportSession);
-    $('#import').onchange = importSession;
     for (const b of $$('[data-forget]', dlg)) b.onclick = () => { store.forgetPlayer(b.dataset.forget); b.remove(); };
   });
 }
@@ -1644,86 +1751,55 @@ function saveAndApply() {
   applySettings();
 }
 
-// Sharing the game night, inside Settings (only when a game night is open):
-// the share button, or the QR code, code, link, connection and devices.
-// Devices are just screens, not players.
-function refreshSharing() {
-  const el = $('#sharing', dlg);
+// Connections, for a shared game night only. Devices are just screens, not
+// players.
+function refreshConnection() {
+  const el = $('#conn', dlg);
   if (!el) return;
-  el.hidden = !live;
-  if (!live) return;
+  el.hidden = !live?.shared && !live?.rec.expired;
+  if (el.hidden) return;
   if (!live.shared) {
-    el.innerHTML = `
-      <h3>${tt('share.title')}</h3>
-      ${live.rec.expired ? `<p class="notice">${tt('session.expired')}</p>` : `<p>${tt('share.intro')}</p>`}
-      <button type="button" class="btn primary" id="do-share">${icon('qr')}${tt(live.rec.expired ? 'share.again' : 'share.start')}</button>
-      <p class="muted small">${tt('share.expiry')}</p>`;
-    $('#do-share').onclick = async (e) => {
-      e.currentTarget.disabled = true;
-      try {
-        await live.share();
-      } catch {
-        toast(t('share.failed'));
-      }
-      refreshSharing();
-    };
+    el.innerHTML = `<h3>${tt('conn.title')}</h3><p class="notice">${tt('session.expired')}</p>`;
     return;
   }
-  const url = shareUrl(live.rec.code);
   const me = store.deviceId();
   const devices = [...live.devices].sort((a, b) => (a.id === me ? -1 : b.id === me ? 1 : a.since - b.since));
   const pending = live.rec.pending.length;
   el.innerHTML = `
-    <h3>${tt('share.title')}</h3>
-    ${qrSvg(url)}
-    <p class="big-code">${esc(live.rec.code)}</p>
-    <p class="muted center small">${esc(url.replace(/^https?:\/\//, ''))}</p>
-    <div class="row wrap center">
-      <button type="button" class="btn" id="copy-link">${icon('copy')}${tt('share.copy')}</button>
-      ${navigator.share ? `<button type="button" class="btn" id="native-share">${icon('share')}${tt('share.native')}</button>` : ''}
-    </div>
+    <h3>${tt('conn.title')}</h3>
     <p class="conn-status"><span class="conn-dot status-${live.status}">${tt(`status.${live.status}`)}</span>
+      <span class="muted">${esc(live.rec.code)}</span>
       ${pending ? `<span class="muted">${tt('conn.pending', { n: pending })}</span>` : ''}</p>
     <h4>${tt('conn.devices', { n: devices.length })}</h4>
     <ul class="devices">${devices.map((d) => `<li>${icon('device')}<span>${esc(d.label || '?')}${d.id === me ? ` <span class="badge">${tt('conn.me')}</span>` : ''}</span><span class="muted">${tt('conn.since', { time: timeLabel(d.since) })}</span></li>`).join('') || `<li class="muted">${tt('conn.none')}</li>`}</ul>
-    <p class="muted small">${tt('share.expiry')}</p>
     <div class="row wrap"><button type="button" class="btn danger" id="conn-leave">${tt('conn.leave')}</button></div>`;
-  $('#copy-link').onclick = () => copyLink(url);
-  $('#native-share')?.addEventListener('click', () => navigator.share({ title: t('app.name'), url }).catch(() => {}));
-  $('#conn-leave').onclick = () => {
-    if (!confirm(t('conn.leaveConfirm'))) return;
+  $('#conn-leave').onclick = async () => {
+    if (!(await ask(t('conn.leaveConfirm'), { ok: t('ask.leave'), danger: true }))) return;
     live.leave();
-    refreshSharing();
+    refreshConnection();
     render();
   };
 }
 
-function exportSession() {
-  const data = { app: 'scorepad', version: 1, createdAt: live.rec.createdAt, events: [...live.rec.events, ...live.rec.pending] };
-  const blob = new Blob([JSON.stringify(data, null, 1)], { type: 'application/json' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `poengblokka-${new Date(live.rec.createdAt).toISOString().slice(0, 10)}.json`;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-}
-
-async function importSession(e) {
-  const file = e.target.files?.[0];
-  if (!file) return;
-  try {
-    const data = JSON.parse(await file.text());
-    if (data?.app !== 'scorepad' || !Array.isArray(data.events)) throw new Error('format');
-    const rec = store.newSession({ events: data.events });
-    if (Number.isFinite(data.createdAt)) {
-      rec.createdAt = data.createdAt;
-      store.saveSession(rec);
-    }
-    dlg.close();
-    go(`#/s/${rec.id}`);
-  } catch {
-    toast(t('settings.importFailed'));
-  }
+// A styled yes/no question instead of the browser's confirm(). Resolves to
+// true only for the OK button; Escape, the backdrop and Cancel are "no".
+function ask(message, { ok = t('ask.ok'), cancel = t('ask.cancel'), danger = false } = {}) {
+  const el = $('#ask');
+  return new Promise((resolve) => {
+    el.innerHTML = `<form method="dialog" class="dlg-inner ask-inner">
+      <p class="ask-msg" id="ask-msg">${esc(message)}</p>
+      <div class="ask-actions">
+        <button type="submit" value="no" class="btn">${esc(cancel)}</button>
+        <button type="submit" value="yes" class="btn ${danger ? 'danger-fill' : 'primary'}">${esc(ok)}</button>
+      </div>
+    </form>`;
+    el.setAttribute('aria-labelledby', 'ask-msg');
+    el.returnValue = '';
+    el.onclose = () => resolve(el.returnValue === 'yes');
+    el.onclick = (e) => { if (e.target === el) el.close(''); };
+    el.showModal();
+    $('button[value="yes"]', el).focus();
+  });
 }
 
 // --- Big screen ------------------------------------------------------------------------
