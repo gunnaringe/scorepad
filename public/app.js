@@ -105,10 +105,13 @@ function qrSvg(text) {
 
 const shareUrl = (code) => `${location.origin}/s/${code}`;
 
-// The share code in a bar. Lives in a .chip-slot, so sharing later fills it.
+// The share spot in a bar: a share button until the game night is shared,
+// then its code and connection status. Both open sharing in Settings. Lives
+// in a .chip-slot, so sharing later swaps it.
 function statusChip() {
-  if (!live?.shared) return '';
-  return `<button type="button" class="status-chip status-${live.status}" data-act="share" title="${tt(`status.${live.status}`)}"><span class="dot"></span>${esc(live.rec.code)}</button>`;
+  if (!live) return '';
+  if (!live.shared) return `<button type="button" class="icon-btn" data-act="sharing" data-i18n-title="share.title" title="${tt('share.title')}" aria-label="${tt('share.title')}">${icon('qr')}</button>`;
+  return `<button type="button" class="status-chip status-${live.status}" data-act="sharing" title="${tt(`status.${live.status}`)}"><span class="dot"></span>${esc(live.rec.code)}</button>`;
 }
 const chipSlot = () => `<span class="chip-slot">${statusChip()}</span>`;
 
@@ -172,8 +175,7 @@ function onLive(what) {
   }
   if (what === 'state' && form && sheet.open) checkStale();
   for (const el of $$('.chip-slot')) el.innerHTML = statusChip();
-  if (dlg.open && dlg.dataset.kind === 'settings') refreshConnection();
-  if (dlg.open && dlg.dataset.kind === 'share' && what !== 'devices') renderShare();
+  if (dlg.open && dlg.dataset.kind === 'settings') refreshSharing();
 }
 
 function render() {
@@ -199,7 +201,7 @@ addEventListener('hashchange', render);
 // Clicks on [data-act] anywhere in the view.
 const actions = {
   settings: () => openSettings(),
-  share: () => openShare(),
+  sharing: () => openSettings('sharing'),
 };
 document.addEventListener('click', (e) => {
   const el = e.target.closest('[data-act]');
@@ -341,10 +343,9 @@ function renderSession() {
     <main class="page">
       <div class="stack">
         ${live.rec.expired ? `<p class="notice">${tt('session.expired')}</p>` : ''}
-        <div class="tiles">
-          <a class="btn primary tile" href="#/s/${route.sid}/new">${icon('plus')}<span>${tt('session.newGame')}</span></a>
-          <button type="button" class="btn tile" data-act="share">${icon('qr')}<span>${tt('session.share')}</span></button>
-          <a class="btn tile" href="#/s/${route.sid}/dash">${icon('tv')}<span>${tt('session.dashboard')}</span></a>
+        <div class="stack tight">
+          <a class="btn primary big" href="#/s/${route.sid}/new">${icon('plus')}${tt('session.newGame')}</a>
+          <a class="link center" href="#/s/${route.sid}/dash">${tt('menu.dashboard')}</a>
         </div>
         ${games.length ? `<div class="stack tight">${games.map(card).join('')}</div>` : `<p class="empty">${tt('session.empty')}</p>`}
         <button type="button" class="link danger" id="delete-session">${tt('session.delete')}</button>
@@ -1562,14 +1563,12 @@ function openGameMenu() {
       ${item('m-end', game.ended ? 'play' : 'flag', t(game.ended ? 'menu.reopen' : 'menu.end'))}
       ${item('m-rules', 'book', t('menu.rules'))}
       ${item('m-dash', 'tv', t('menu.dashboard'))}
-      ${item('m-share', 'qr', t('session.share'))}
       ${sum.done ? item('m-again', 'plus', t('act.again')) : ''}
       ${item('m-settings', 'gear', t('settings.title'))}
       ${item('m-delete', 'trash', t('menu.delete'), 'danger')}
     </div>`, () => {
     $('#m-rules').onclick = () => openRules(game);
     $('#m-dash').onclick = () => { dlg.close(); go(`#/s/${route.sid}/g/${game.id}/dash`); };
-    $('#m-share').onclick = () => openShare();
     $('#m-again')?.addEventListener('click', () => { dlg.close(); go(`#/s/${route.sid}/new?from=${game.id}`); });
     $('#m-end').onclick = () => {
       dlg.close();
@@ -1586,53 +1585,7 @@ function openGameMenu() {
   });
 }
 
-// --- Share ---------------------------------------------------------------------------
-
-function openShare() {
-  if (!live) return;
-  dlg.dataset.kind = 'share';
-  renderShare();
-  if (!dlg.open) dlg.showModal();
-}
-
-function renderShare() {
-  const head = `<header class="dlg-head"><h2>${tt('share.title')}</h2><button type="button" class="icon-btn" data-close data-i18n-title="nav.close">${icon('x')}</button></header>`;
-  if (!live.shared) {
-    dlg.innerHTML = `<div class="dlg-inner">${head}
-      <p>${tt('share.intro')}</p>
-      <p class="muted">${tt('share.expiry')}</p>
-      <button type="button" class="btn primary big" id="do-share">${icon('qr')}${tt(live.rec.expired ? 'share.again' : 'share.start')}</button>
-    </div>`;
-    labelDialog();
-    applyI18n(dlg);
-    $('#do-share').onclick = async (e) => {
-      e.target.disabled = true;
-      try {
-        await live.share();
-        renderShare();
-      } catch {
-        e.target.disabled = false;
-        toast(t('share.failed'));
-      }
-    };
-    return;
-  }
-  const url = shareUrl(live.rec.code);
-  dlg.innerHTML = `<div class="dlg-inner share">${head}
-    ${qrSvg(url)}
-    <p class="big-code">${esc(live.rec.code)}</p>
-    <p class="muted center">${esc(url.replace(/^https?:\/\//, ''))}</p>
-    <div class="row wrap center">
-      <button type="button" class="btn" id="copy-link">${icon('copy')}${tt('share.copy')}</button>
-      ${navigator.share ? `<button type="button" class="btn" id="native-share">${icon('share')}${tt('share.native')}</button>` : ''}
-    </div>
-    <p class="muted center small">${tt('share.expiry')}</p>
-  </div>`;
-  labelDialog();
-  applyI18n(dlg);
-  $('#copy-link').onclick = () => copyLink(url);
-  $('#native-share')?.addEventListener('click', () => navigator.share({ title: t('app.name'), url }).catch(() => {}));
-}
+// --- Sharing (lives in Settings) -------------------------------------------------------
 
 async function copyLink(url) {
   try {
@@ -1645,11 +1598,13 @@ async function copyLink(url) {
 
 // --- Settings --------------------------------------------------------------------------
 
-function openSettings() {
+// focus: 'sharing' scrolls to the sharing section (from the code chip).
+function openSettings(focus) {
   const themes = ['hytte', 'cozy', 'lys', 'mork', 'kontrast'];
   const recent = store.recentPlayers();
   openDialog('settings', `
     <header class="dlg-head"><h2>${tt('settings.title')}</h2><button type="button" class="icon-btn" data-close data-i18n-title="nav.close">${icon('x')}</button></header>
+    <section id="sharing" class="sharing" hidden></section>
     <section>
       <h3>${tt('settings.lang')}</h3>
       <div class="segmented" role="group" aria-label="${tt('settings.lang')}">${['auto', 'no', 'en'].map((l) => `<button type="button" data-lang="${l}" class="${settings.lang === l ? 'on' : ''}" ${pressed(settings.lang === l)}>${tt(`settings.lang.${l}`)}</button>`).join('')}</div>
@@ -1661,7 +1616,6 @@ function openSettings() {
     <section>
       <label class="switch-row"><span>${tt('settings.wake')}</span><input type="checkbox" class="switch" id="wake"${settings.wake ? ' checked' : ''}></label>
     </section>
-    <section id="conn"></section>
     <section>
       <h3>${tt('settings.data')}</h3>
       <div class="row wrap">
@@ -1674,7 +1628,8 @@ function openSettings() {
       <div class="chips">${recent.map((p) => `<button type="button" class="chip removable" data-forget="${esc(p.name)}" aria-label="${tt('settings.forget', { name: p.name })}">${esc(p.name)} ${icon('x')}</button>`).join('')}</div>
     </section>` : ''}
     <p class="muted small center">${tt('settings.about')}</p>`, () => {
-    refreshConnection();
+    refreshSharing();
+    if (focus === 'sharing') $('#sharing', dlg)?.scrollIntoView({ block: 'start' });
     for (const b of $$('[data-lang]', dlg)) b.onclick = () => { settings.lang = b.dataset.lang; saveAndApply(); openSettings(); render(); };
     for (const b of $$('[data-theme-pick]', dlg)) b.onclick = () => { settings.theme = b.dataset.themePick; saveAndApply(); openSettings(); };
     $('#wake').onchange = (e) => { settings.wake = e.target.checked; saveAndApply(); updateWake(); };
@@ -1689,35 +1644,56 @@ function saveAndApply() {
   applySettings();
 }
 
-// Connection section: only for a shared session. Devices are just screens, not players.
-function refreshConnection() {
-  const el = $('#conn', dlg);
+// Sharing the game night, inside Settings (only when a game night is open):
+// the share button, or the QR code, code, link, connection and devices.
+// Devices are just screens, not players.
+function refreshSharing() {
+  const el = $('#sharing', dlg);
   if (!el) return;
-  if (!live?.shared) {
-    el.innerHTML = live?.rec.expired ? `<h3>${tt('conn.title')}</h3><p class="muted">${tt('session.expired')}</p>` : '';
-    el.hidden = !live?.rec.expired;
+  el.hidden = !live;
+  if (!live) return;
+  if (!live.shared) {
+    el.innerHTML = `
+      <h3>${tt('share.title')}</h3>
+      ${live.rec.expired ? `<p class="notice">${tt('session.expired')}</p>` : `<p>${tt('share.intro')}</p>`}
+      <button type="button" class="btn primary" id="do-share">${icon('qr')}${tt(live.rec.expired ? 'share.again' : 'share.start')}</button>
+      <p class="muted small">${tt('share.expiry')}</p>`;
+    $('#do-share').onclick = async (e) => {
+      e.currentTarget.disabled = true;
+      try {
+        await live.share();
+      } catch {
+        toast(t('share.failed'));
+      }
+      refreshSharing();
+    };
     return;
   }
-  el.hidden = false;
+  const url = shareUrl(live.rec.code);
   const me = store.deviceId();
   const devices = [...live.devices].sort((a, b) => (a.id === me ? -1 : b.id === me ? 1 : a.since - b.since));
   const pending = live.rec.pending.length;
   el.innerHTML = `
-    <h3>${tt('conn.title')}</h3>
+    <h3>${tt('share.title')}</h3>
+    ${qrSvg(url)}
+    <p class="big-code">${esc(live.rec.code)}</p>
+    <p class="muted center small">${esc(url.replace(/^https?:\/\//, ''))}</p>
+    <div class="row wrap center">
+      <button type="button" class="btn" id="copy-link">${icon('copy')}${tt('share.copy')}</button>
+      ${navigator.share ? `<button type="button" class="btn" id="native-share">${icon('share')}${tt('share.native')}</button>` : ''}
+    </div>
     <p class="conn-status"><span class="conn-dot status-${live.status}">${tt(`status.${live.status}`)}</span>
       ${pending ? `<span class="muted">${tt('conn.pending', { n: pending })}</span>` : ''}</p>
-    <p>${tt('conn.code')}: <button type="button" class="link code" id="conn-share">${esc(live.rec.code)}</button></p>
     <h4>${tt('conn.devices', { n: devices.length })}</h4>
     <ul class="devices">${devices.map((d) => `<li>${icon('device')}<span>${esc(d.label || '?')}${d.id === me ? ` <span class="badge">${tt('conn.me')}</span>` : ''}</span><span class="muted">${tt('conn.since', { time: timeLabel(d.since) })}</span></li>`).join('') || `<li class="muted">${tt('conn.none')}</li>`}</ul>
     <p class="muted small">${tt('share.expiry')}</p>
-    <div class="row wrap"><button type="button" class="btn" id="conn-copy">${icon('copy')}${tt('share.copy')}</button></div>
     <div class="row wrap"><button type="button" class="btn danger" id="conn-leave">${tt('conn.leave')}</button></div>`;
-  $('#conn-share').onclick = openShare;
-  $('#conn-copy').onclick = () => copyLink(shareUrl(live.rec.code));
+  $('#copy-link').onclick = () => copyLink(url);
+  $('#native-share')?.addEventListener('click', () => navigator.share({ title: t('app.name'), url }).catch(() => {}));
   $('#conn-leave').onclick = () => {
     if (!confirm(t('conn.leaveConfirm'))) return;
     live.leave();
-    refreshConnection();
+    refreshSharing();
     render();
   };
 }

@@ -839,3 +839,9 @@ body[data-view="dash"] { overflow: hidden; }
 .seat-name .icon { width: .95em; height: .95em; opacity: .35; flex: none; }
 .seat-name:hover .icon { opacity: .7; }
 .seat-input { flex: 1; min-width: 0; font: inherit; font-weight: 600; padding: .45rem .7rem; border-radius: 12px; border: 2px solid var(--accent); background: var(--paper-alt); color: var(--ink); }
+
+/* Sharing, in Settings. */
+.sharing { gap: .6rem; padding-bottom: 1rem; border-bottom: 1px dashed var(--line); }
+.sharing .qr { width: min(100%, 220px); margin: 0 auto; border-radius: 12px; box-shadow: 0 0 0 1px var(--line); }
+.sharing .btn.primary { align-self: flex-start; }
+.link.center { display: block; text-align: center; }

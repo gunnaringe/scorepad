@@ -81,8 +81,11 @@ don't reuse its names, D1 database or rate-limit namespace (`1001`).
   last round or the menu). Done games show `resultsHtml()` (podium for the
   top three, ties share a medal, then the rest) instead of the table, with a
   Tabell/Resultat toggle; the big screen shows the same podium.
-- **Devices aren't players.** Connections are listed only under Settings →
-  Connection. The dashboard is a view mode (`#/s/:sid/dash`, or
+- **Sharing lives in Settings** (`refreshSharing()`, the first section when
+  a game night is open): share button, QR, code, link, connection status,
+  devices, leave. The bar's `.chip-slot` shows a share button (unshared) or
+  the code (shared); both open that section. No separate share dialog.
+- **Devices aren't players.** Connections are listed only in that section. The dashboard is a view mode (`#/s/:sid/dash`, or
   `/s/CODE?view=dashboard` from a link), not a role.
 - **Routes:** hash-based (`#/s/:sid/g/:gid`). `/s/CODE` reaches `index.html`
   through the SPA fallback; `boot()` joins and swaps to the hash route.

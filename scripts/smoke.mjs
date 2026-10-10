@@ -75,8 +75,8 @@ const addPlayers = async (p, names) => { for (const n of names) { await p.fill('
   await A.p.click('#new-game');
   await addPlayers(A.p, ['Kari', 'Ola', 'Per']);
   await A.p.click('#start');
-  await A.p.click('#game-menu');
-  await A.p.click('#m-share');
+  // The share button in the game bar opens sharing in Settings.
+  await A.p.click('.chip-slot [data-act="sharing"]');
   await A.p.click('#do-share');
   await A.p.waitForSelector('.big-code');
   const code = await A.p.textContent('.big-code');
