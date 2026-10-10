@@ -119,6 +119,48 @@
   --knit-c: #6cbf95;
 }
 
+[data-theme="cozy"] {
+  color-scheme: light;
+  /* Kos: a snowy evening in, hot chocolate, heart waffles with jam, skis by
+     the door. Cocoa night with falling snow, whipped-cream paper, a golden
+     waffle grid, lingonberry red and ski blue. */
+  --bg: #2a1812;
+  --bg-image:
+    radial-gradient(circle at 20% 30%, rgb(255 244 230 / .55) 0 1.6px, transparent 2.2px) 0 0 / 90px 90px,
+    radial-gradient(circle at 70% 65%, rgb(255 244 230 / .35) 0 1.1px, transparent 1.6px) 0 0 / 57px 57px,
+    radial-gradient(circle at 40% 85%, rgb(255 244 230 / .25) 0 2.2px, transparent 2.8px) 0 0 / 133px 133px,
+    linear-gradient(180deg, #43271c, #24140f);
+  --bar: #3d2319;
+  --bar-ink: #fff4e6;
+  --paper: #fffaf3;
+  --paper-head: #f6dfae;
+  --paper-alt: #fdf1df;
+  --ink: #3b2219;
+  --muted: #6b4a3a;
+  --line: #ecd3a8;
+  --margin: #d77f73;
+  --accent: #b3263a;
+  --accent-ink: #fff8f0;
+  --accent-2: #1f4e8c;
+  --accent-2-ink: #ffffff;
+  --warn: #f4c25b;
+  --gold: #e9a83a;
+  --lead: #fde4b0;
+  --hit: #2f7a4f;
+  --miss: #b3263a;
+  --chip: #f3e3c7;
+  --chip-ink: #3b2219;
+  --shadow: 0 2px 0 rgb(0 0 0 / .06), 0 12px 28px rgb(20 6 0 / .35);
+  --on-bg: #fff4e6;
+  --on-bg-muted: #e6cfb2;
+  --knit-a: #e9b44c;
+  --knit-b: #b9802a;
+  --knit-c: #b3263a;
+  --waffle:
+    linear-gradient(90deg, rgb(185 128 42 / .32) 2px, transparent 2px) 0 0 / 12px 12px,
+    linear-gradient(rgb(185 128 42 / .32) 2px, transparent 2px) 0 0 / 12px 12px;
+}
+
 [data-theme="kontrast"] {
   color-scheme: dark;
   --bg: #000;
@@ -513,13 +555,13 @@ dialog::backdrop { background: rgb(15 8 4 / .55); backdrop-filter: blur(2px); }
 }
 .menu-item:hover { background: var(--chip); }
 .menu-item.danger { color: var(--miss); }
-.themes { display: grid; grid-template-columns: repeat(4, 1fr); gap: .4rem; }
+.themes { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: .25rem; }
 .theme-swatch {
   border: 2px solid transparent; background: none; border-radius: 14px; padding: .35rem .2rem;
-  display: flex; flex-direction: column; align-items: center; gap: .3rem; font-size: .82rem;
+  display: flex; flex-direction: column; align-items: center; gap: .3rem; font-size: .78rem; text-align: center; line-height: 1.15; min-height: 2.75rem;
 }
 .theme-swatch.on { border-color: var(--accent); }
-.sw { width: 2.6rem; height: 2.6rem; border-radius: 50%; box-shadow: inset 0 0 0 2px rgb(0 0 0 / .15); }
+.sw { width: 2.4rem; height: 2.4rem; border-radius: 50%; box-shadow: inset 0 0 0 2px rgb(0 0 0 / .15); }
 .sw-hytte { background: linear-gradient(135deg, #4a2e1c 0 45%, #fbf3e2 45% 70%, #a8322a 70%); }
 .sw-lys { background: linear-gradient(135deg, #eef1f4 0 45%, #fff 45% 70%, #2563eb 70%); }
 .sw-mork { background: linear-gradient(135deg, #121417 0 45%, #1e2226 45% 70%, #e0675a 70%); }
@@ -686,4 +728,51 @@ body[data-view="dash"] { overflow: hidden; }
   .action-bar { padding-block: .3rem calc(.3rem + env(safe-area-inset-bottom)); }
   .btn { min-height: 2.5rem; }
   .btn.big { min-height: 2.6rem; font-size: 1rem; }
+}
+
+/* --- Kos (cozy) --------------------------------------------------------------- */
+
+.hero-art { display: none; }
+[data-theme="cozy"] .hero-art {
+  display: block; height: clamp(96px, 28vw, 140px); margin: .25rem auto -.25rem; max-width: 360px;
+  background: url(/themes/cozy.svg) center / contain no-repeat;
+}
+[data-theme="cozy"] .hero h1 { text-shadow: 0 0 22px rgb(233 168 58 / .5); }
+/* A waffle-iron band under bars instead of the knit. */
+[data-theme="cozy"] .bar::after, [data-theme="cozy"] .hero::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: -8px; height: 8px; pointer-events: none;
+  background: var(--waffle), #e9b44c;
+}
+[data-theme="cozy"] .game-info {
+  padding-bottom: calc(.5rem + 6px);
+  background: var(--waffle), linear-gradient(#e9b44c, #e9b44c) 0 100% / 100% 6px no-repeat, var(--bar);
+  background-size: 12px 12px, 12px 12px, 100% 6px, auto;
+  background-position: 0 100%, 0 100%, 0 100%, 0 0;
+  background-repeat: repeat-x, repeat-x, no-repeat, repeat;
+}
+@media (max-height: 500px) { [data-theme="cozy"] .game-info { padding-bottom: calc(.2rem + 6px); } }
+/* Waffle texture on the sticky header and totals of the score table. */
+[data-theme="cozy"] .score thead th,
+[data-theme="cozy"] .score tfoot th,
+[data-theme="cozy"] .score tfoot td,
+[data-theme="cozy"] .score .rn {
+  background: var(--waffle), var(--paper-head);
+}
+[data-theme="cozy"] .score tfoot td.lead { background: var(--waffle), var(--lead); }
+[data-theme="cozy"] .btn.primary:not(:disabled):not(.is-disabled) {
+  background: linear-gradient(180deg, #c53246, #a11f33);
+  box-shadow: 0 2px 0 #7d1626, inset 0 1px 0 rgb(255 255 255 / .2);
+}
+[data-theme="cozy"] .card, [data-theme="cozy"] .preset { border-radius: 22px; }
+[data-theme="cozy"] .rank.r1 { box-shadow: 0 0 12px rgb(233 168 58 / .8); }
+/* Steaming mug in the corner of the big screen. */
+[data-theme="cozy"] .dash::before {
+  content: ""; position: fixed; left: 0; bottom: 0; width: min(36vw, 420px); aspect-ratio: 360 / 140;
+  background: url(/themes/cozy.svg) left bottom / contain no-repeat; opacity: .22; pointer-events: none;
+}
+[data-theme="cozy"] .dash > * { position: relative; }
+.sw-cozy {
+  background:
+    radial-gradient(circle at 70% 30%, #fff4e6 0 2px, transparent 2.5px),
+    linear-gradient(135deg, #3d2319 0 42%, #e9b44c 42% 68%, #b3263a 68%);
 }

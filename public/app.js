@@ -253,6 +253,7 @@ function renderHome() {
   view.innerHTML = `
     <header class="hero">
       <div class="hero-top"><span></span><button type="button" class="icon-btn" data-act="settings" data-i18n-title="settings.title">${icon('gear')}</button></div>
+      <div class="hero-art" aria-hidden="true"></div>
       <h1>${tt('app.name')}</h1>
       <p>${tt('app.tagline')}</p>
     </header>
@@ -746,7 +747,7 @@ function infoHtml(game, sum) {
   } else if (r?.contract) {
     const c = r.contract;
     extra = tt('am.contractLine', { k: pname(c.kurtier), bid: c.bid, p: c.partner ? pname(c.partner) : t('am.alone') });
-  } else if (sum.completed && !localStorage.getItem(EDIT_HINT)) {
+  } else if (sum.completed && route.name === 'game' && !localStorage.getItem(EDIT_HINT)) {
     extra = tt('game.editHint');
   } else if (sum.completed) {
     const leader = sum.sorted[0];
@@ -1530,7 +1531,7 @@ async function copyLink(url) {
 // --- Settings --------------------------------------------------------------------------
 
 function openSettings() {
-  const themes = ['hytte', 'lys', 'mork', 'kontrast'];
+  const themes = ['hytte', 'cozy', 'lys', 'mork', 'kontrast'];
   const recent = store.recentPlayers();
   openDialog('settings', `
     <header class="dlg-head"><h2>${tt('settings.title')}</h2><button type="button" class="icon-btn" data-close data-i18n-title="nav.close">${icon('x')}</button></header>

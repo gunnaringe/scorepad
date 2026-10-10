@@ -8,7 +8,7 @@
 //
 // Bump CACHE only when changing what's precached or how.
 
-const CACHE = 'scorepad-v1';
+const CACHE = 'scorepad-v2';
 const PRECACHE = [
   '/',
   '/styles.css',
@@ -23,6 +23,7 @@ const PRECACHE = [
   '/fonts/fredoka-latin-ext.woff2',
   '/icons/icon.svg',
   '/icons/icon-192.png',
+  '/themes/cozy.svg',
 ];
 
 self.addEventListener('install', (e) => {

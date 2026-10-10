@@ -150,6 +150,7 @@ export const I18N = {
     'settings.about': "Poengblokka lagrer alt på denne enheten. Delte spillkvelder ligger på serveren i 7 dager.",
 
     'theme.hytte': 'Hytte',
+    'theme.cozy': 'Kos',
     'theme.lys': 'Lys',
     'theme.mork': 'Mørk',
     'theme.kontrast': 'Høy kontrast',
@@ -411,6 +412,7 @@ export const I18N = {
     'settings.about': "Scorepad keeps everything on this device. Shared game nights stay on the server for 7 days.",
 
     'theme.hytte': 'Cabin',
+    'theme.cozy': 'Cozy',
     'theme.lys': 'Light',
     'theme.mork': 'Dark',
     'theme.kontrast': 'High contrast',
