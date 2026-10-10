@@ -91,7 +91,7 @@ const addPlayers = async (p, names) => { for (const n of names) { await p.fill('
   await B.p.waitForSelector('.board .pill', { timeout: 10000 });
   await A.p.click('#primary');
   const rows = await A.p.$$('#sheet .entry');
-  for (let i = 0; i < rows.length; i++) await rows[i].$$eval('.nchip', (cs, v) => cs[v].click(), i === 0 ? 1 : 0);
+  for (let i = 0; i < rows.length; i++) await rows[i].$$eval('.nchip', (cs, v) => cs[v].click(), i === 0 ? 10 : 0);
   await A.p.click('#sheet-save');
   await B.p.waitForFunction(() => document.querySelector('.board .d-total')?.textContent === '10', null, { timeout: 10000 });
   await B.p.screenshot({ path: '/tmp/shots/dash.png' });

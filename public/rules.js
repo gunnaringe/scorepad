@@ -41,7 +41,7 @@ export const DEFAULT_RULES = {
 
 export const PRESETS = {
   free: {},
-  selbuvist: { entry: 'bids', cards: 'updown', maxCards: 10 },
+  selbuvist: { entry: 'bids', cards: 'downup', maxCards: 10 },
   amerikaner: { entry: 'contract', cards: 'deck', target: 52 },
 };
 

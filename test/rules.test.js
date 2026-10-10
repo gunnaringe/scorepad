@@ -34,7 +34,7 @@ test('selbuvist: pending bids are not scored and mark the current round', () => 
   const sum = summarize(s.games.g);
   assert.equal(sum.pending.id, 'r2');
   assert.equal(sum.current, 1);
-  assert.equal(sum.cards, 2);
+  assert.equal(sum.cards, 9);
   assert.deepEqual(sum.totals, { a: 11, b: 10 });
 });
 
@@ -134,5 +134,5 @@ test('two devices starting the same round merge instead of stranding one', () =>
   assert.deepEqual(g.rounds[0], { id: 'fromB', bids: { a: 0, b: 1 } });
   const sum = summarize(g);
   assert.equal(sum.pending.id, 'fromB');
-  assert.equal(sum.cards, 1);
+  assert.equal(sum.cards, 10);
 });

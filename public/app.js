@@ -503,10 +503,10 @@ function renderNew() {
             ${preset ? '' : `<span class="preset own on" role="radio" aria-checked="true">${tt('rules.own')}</span>`}
           </div>
           <div class="card rules-card">
-            <p class="rules-compact">${esc(compactSummary(r))}</p>
+            ${preset ? '' : `<p class="rules-compact">${esc(compactSummary(r))}</p>`}
             <details class="rules-editor"${draft.open ? ' open' : ''}>
               <summary>${tt('new.customize')}</summary>
-              <ul class="rules-summary">${rulesSummary(r).map((l) => `<li>${esc(l)}</li>`).join('')}</ul>
+              ${preset ? '' : `<ul class="rules-summary">${rulesSummary(r).map((l) => `<li>${esc(l)}</li>`).join('')}</ul>`}
               ${SOURCES[preset] ? `<p class="small muted">${SOURCES[preset]}</p>` : ''}
               ${ruleFields()}
             </details>
