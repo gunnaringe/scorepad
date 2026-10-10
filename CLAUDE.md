@@ -9,8 +9,8 @@ don't reuse its names, D1 database or rate-limit namespace (`1001`).
 
 - `public/`: the whole app, no build, no framework, no dependencies, no
   third-party requests. ES modules:
-  - `rules.js`: presets, scoring, card counts, dealer rotation, `summarize()`.
-    Pure functions.
+  - `rules.js`: the rules model, scoring, card counts, dealer rotation,
+    `summarize()`. Pure functions.
   - `core.js`: the event reducer. State = fold over change events
     (`addPlayer`, `newGame`, `putRound`, `deleteRound`, …).
   - `store.js`: localStorage records and `Live` (WebSocket sync).
@@ -32,10 +32,20 @@ don't reuse its names, D1 database or rate-limit namespace (`1001`).
   from other devices. Add an event type in `EVENT_TYPES` and `HANDLERS`, and
   keep old events valid (no breaking renames: logs live up to 7 days on the
   server and forever in localStorage).
+- **One game model.** A game is `{ name, rules, players, rounds }`. `rules`
+  is a flat object (defaults in `DEFAULT_RULES`): `entry` (`scores` | `bids` |
+  `contract`) picks the round form, `cards` the card sequence, and the rest
+  are scoring/end parameters. Fritt/Selbuvist/Amerikaner are just `PRESETS`
+  (partial rule objects); `matchPreset()` tells whether rules are unchanged.
+  Nothing branches on a preset name, only on rule values. Add a rule by giving
+  it a default, an i18n label (`rule.<key>`; a test checks), a field in
+  `ruleFields()` and a line in `rulesSummary()`. `sanitizeRules()` enforces
+  types, enums and ranges. Rules can change mid-game (`updateGame`, the same
+  form at `#/s/:sid/g/:gid/edit`) and every round is rescored.
 - **Rounds** are upserted by id via `putRound`. Bid games first store
   `{ bids }` (or `{ contract }` for Amerikaner) and the round shows as
   pending; then `{ bids, tricks }`. `isComplete()` decides which, and only the
-  last round can be pending. Amerikaner stores tricks only for players
+  last round can be pending. Contract rounds store tricks only for players
   outside the contract; kurtier + partner get the remainder.
 - **Sync:** one Durable Object per code (`idFromName(code)`), SQLite table
   `events(seq, id UNIQUE, body)`. Clients send `hello {since}` and get a

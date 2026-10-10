@@ -4,10 +4,11 @@ Score keeping for card games, built for phones at the cabin table:
 [poengblokka.apphub.casa](https://poengblokka.apphub.casa)
 (also [scorepad.apphub.casa](https://scorepad.apphub.casa)).
 
-- **Games:** Fritt (free scores), Selbuvist (bid exact tricks, 1→10→1 cards),
-  Amerikaner (kurtier + partner vs. the rest, first to 52) and a custom
-  bid/trick formula. Bids are entered first and shown while the hand is
-  played, then the tricks; the app does the arithmetic.
+- **Games:** every game is a name plus rules. Fritt (free scores), Selbuvist
+  (bid exact tricks, 1→10→1 cards) and Amerikaner (kurtier + partner vs. the
+  rest, first to 52) are presets; every rule can be tweaked, also mid-game
+  (all rounds are rescored). Bids are entered first and shown while the hand
+  is played, then the tricks; the app does the arithmetic.
 - **Table:** player names and totals stay visible while you scroll, in both
   directions. Tap any round to edit or delete it. Totals are always
   recalculated.

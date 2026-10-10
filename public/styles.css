@@ -321,20 +321,26 @@ a.card:active { transform: scale(.99); }
 
 /* --- New game -------------------------------------------------------------------------- */
 
-.presets { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .6rem; }
-.preset {
-  text-align: left; border: 3px solid transparent; border-radius: 18px; padding: .8rem .9rem;
-  background: var(--paper); color: var(--ink); box-shadow: var(--shadow);
-  display: flex; flex-direction: column; gap: .15rem;
+.text-input {
+  width: 100%; padding: .7rem 1rem; border-radius: 99px; border: 2px solid var(--line);
+  background: var(--paper); color: var(--ink); font-size: 1.1rem; font-weight: 600;
 }
-.preset span { font-size: .88rem; color: var(--muted); line-height: 1.25; }
-.preset small { font-size: .78rem; color: var(--muted); margin-top: auto; padding-top: .3rem; }
-.preset.on { border-color: var(--accent); }
-.rules { margin-top: .6rem; color: var(--on-bg); }
-.rules summary { cursor: pointer; color: var(--on-bg-muted); }
-.rules p { margin-top: .5rem; }
-.settings-card summary { cursor: pointer; font-weight: 600; }
-.settings-card[open] summary { margin-bottom: .6rem; }
+.text-input::placeholder { color: var(--muted); font-weight: 500; }
+.presets { display: flex; flex-wrap: wrap; gap: .45rem; margin-bottom: .7rem; }
+.preset {
+  border: 0; border-radius: 99px; padding: .55rem 1.1rem;
+  background: color-mix(in srgb, var(--paper) 88%, transparent); color: var(--ink); font-weight: 600;
+}
+.preset.on { background: var(--accent); color: var(--accent-ink); }
+.preset.own { cursor: default; }
+.rules-card { display: grid; gap: .6rem; }
+.rules-summary { margin: 0; padding-left: 1.2rem; display: grid; gap: .2rem; }
+.dlg .rules-summary { color: var(--ink); }
+.rules-editor summary { cursor: pointer; font-weight: 600; color: var(--accent); padding: .3rem 0; }
+.rule-group { display: grid; gap: .25rem; padding: .7rem 0; border-top: 1px dashed var(--line); }
+.rule-group:first-of-type { border-top: 0; }
+.field-col { display: grid; gap: .35rem; padding: .2rem 0; }
+.switch-row span small, .field-row span small { display: block; font-size: .8rem; }
 
 .seats { list-style: none; margin: 0 0 .6rem; padding: 0; display: grid; gap: .4rem; }
 .seats li {
@@ -362,6 +368,7 @@ a.card:active { transform: scale(.99); }
 }
 .suggest li { padding: .6rem .8rem; border-radius: 12px; cursor: pointer; }
 .suggest li.active, .suggest li:hover { background: var(--chip); }
+.hint { color: var(--on-bg-muted); }
 .hint.warn { margin-top: .6rem; color: var(--gold); }
 
 .action-bar {
@@ -606,3 +613,5 @@ body[data-view="dash"] { overflow: hidden; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+.field-col .segmented { border-radius: 20px; align-self: flex-start; }
+.field-col .segmented button { border-radius: 16px; }

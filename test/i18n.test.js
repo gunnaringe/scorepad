@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { I18N } from '../public/i18n.js';
-import { PRESETS } from '../public/rules.js';
+import { PRESET_IDS, DEFAULT_RULES } from '../public/rules.js';
 
 test('no and en have the same keys', () => {
   assert.deepEqual(Object.keys(I18N.en).sort(), Object.keys(I18N.no).sort());
@@ -14,9 +14,10 @@ test('every literal key used by app.js exists', () => {
   for (const k of keys) assert.ok(k in I18N.no, `missing ${k}`);
 });
 
-test('every preset and setting has strings', () => {
-  for (const [id, p] of Object.entries(PRESETS)) {
-    for (const k of [`preset.${id}`, `preset.${id}.short`, `preset.${id}.rules`]) assert.ok(k in I18N.no, k);
-    for (const k of Object.keys(p.defaults)) assert.ok(`set.${id}.${k}` in I18N.no, `set.${id}.${k}`);
+test('every preset and rule has strings', () => {
+  for (const id of PRESET_IDS) assert.ok(`preset.${id}` in I18N.no, id);
+  for (const [k, v] of Object.entries(DEFAULT_RULES)) {
+    assert.ok(`rule.${k}` in I18N.no, `rule.${k}`);
+    if (typeof v === 'string') assert.ok(`rule.${k}.${v}` in I18N.no, `rule.${k}.${v}`);
   }
 });

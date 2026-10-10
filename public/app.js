@@ -4,14 +4,15 @@
 //          #/s/:sid           session (its games)
 //          #/s/:sid/new       new game (?from=:gid prefills)
 //          #/s/:sid/g/:gid    game table
+//          #/s/:sid/g/:gid/edit  change name and rules
 //          #/s/:sid/dash      dashboard, follows the active game
 //          #/s/:sid/g/:gid/dash  dashboard pinned to one game
 // Shared links are /s/CODE (served index.html by the SPA fallback) and are
 // turned into a local session record, then a hash route.
 
 import {
-  PRESETS, PRESET_IDS, settingsFor, summarize, cardsFor, tricksPerHand, teamTricks,
-  minBid, scoreRound, bidBalance, dealerFor,
+  DEFAULT_RULES, PRESET_IDS, presetRules, rulesOf, matchPreset, sanitizeRules, playerProblem,
+  summarize, cardsFor, tricksTotal, teamTricks, minBid, scoreRound, bidBalance, dealerFor,
 } from './rules.js';
 import { newId, reduce } from './core.js';
 import * as store from './store.js';
@@ -70,7 +71,8 @@ const timeLabel = (ms) => new Intl.DateTimeFormat(locale(), { hour: '2-digit', m
 const state = () => live?.state;
 const pname = (pid) => state()?.players[pid]?.name ?? '?';
 const names = (pids) => pids.map(pname).join(', ');
-const presetName = (id) => t(`preset.${id}`);
+const gameName = (g) => g.name || t('game.untitled');
+const entryOf = (g) => rulesOf(g).entry;
 
 function go(hash) {
   if (location.hash === hash) render();
@@ -144,6 +146,7 @@ function parseRoute() {
   const r = { sid: parts[1], name: 'session' };
   if (parts[2] === 'new') Object.assign(r, { name: 'new', from: q.get('from') });
   else if (parts[2] === 'dash') r.name = 'dash';
+  else if (parts[2] === 'g' && parts[3] && parts[4] === 'edit') Object.assign(r, { name: 'new', edit: parts[3] });
   else if (parts[2] === 'g' && parts[3]) Object.assign(r, { gid: parts[3], name: parts[4] === 'dash' ? 'dash' : 'game' });
   return r;
 }
@@ -181,7 +184,7 @@ function render() {
   view.onclick = view.onchange = null;
   if (sheet.open && (prev.gid !== route.gid || route.name !== 'game')) sheet.close();
   document.body.dataset.view = route.name;
-  if (route.name === 'game' && !state().games[route.gid]) return go(`#/s/${route.sid}`);
+  if ((route.name === 'game' && !state().games[route.gid]) || (route.edit && !state().games[route.edit])) return go(`#/s/${route.sid}`);
   ({ home: renderHome, session: renderSession, new: renderNew, game: renderGame, dash: renderDash })[route.name]();
   if (prev.name !== route.name || prev.gid !== route.gid) window.scrollTo(0, 0);
   updateWake();
@@ -292,7 +295,7 @@ function renderSession() {
       : tt('game.notStarted');
     const progress = sum.totalRounds ? tt('game.roundOf', { n: Math.min(sum.completed, sum.totalRounds), of: sum.totalRounds }) : tt('game.rounds', { n: sum.completed });
     return `<a class="card game-card${sum.done ? ' done' : ''}" href="#/s/${route.sid}/g/${g.id}">
-      <span class="game-card-top"><strong>${esc(presetName(g.preset))}</strong><span class="muted">${progress}</span></span>
+      <span class="game-card-top"><strong>${esc(gameName(g))}</strong><span class="muted">${progress}</span></span>
       <span class="game-card-players">${esc(names(g.players))}</span>
       <span class="game-card-lead">${lead}</span>
     </a>`;
@@ -327,21 +330,163 @@ function renderSession() {
   };
 }
 
-// --- New game ------------------------------------------------------------------
+// --- New game / edit game ------------------------------------------------------------
+//
+// A game is a name plus rules. The presets only fill in the rules; every rule
+// can be changed, also later from the game menu (old rounds are rescored).
 
 function initDraft() {
   const s = state();
+  if (route.edit) {
+    const g = s.games[route.edit];
+    draft = { edit: g.id, name: g.name, rules: rulesOf(g), players: [], firstDealer: 0 };
+    return;
+  }
   const from = s.games[route.from] ?? s.games[s.gameOrder.at(-1)];
   if (from) {
     draft = {
-      preset: from.preset,
-      settings: { ...from.settings },
+      name: from.name,
+      rules: rulesOf(from),
       players: from.players.map((pid) => ({ pid, name: pname(pid) })),
       firstDealer: route.from ? (from.firstDealer + 1) % from.players.length : 0,
     };
   } else {
-    draft = { preset: 'selbuvist', settings: {}, players: [], firstDealer: 0 };
+    draft = { name: '', rules: presetRules('selbuvist'), players: [], firstDealer: 0 };
   }
+}
+
+// What an unnamed game is called: its preset, or "Own rules".
+const suggestedName = (rules) => {
+  const p = matchPreset(rules);
+  return p ? t(`preset.${p}`) : t('rules.ownName');
+};
+
+// The rules in plain words, one line per rule that matters.
+function rulesSummary(r) {
+  const lines = [t(`sum.entry.${r.entry}`)];
+  if (r.entry !== 'scores') {
+    const rounds = r.cards === 'updown' || r.cards === 'downup' ? r.maxCards * 2 : 0;
+    lines.push(t(`sum.cards.${r.cards}`, { max: r.maxCards, n: rounds }));
+  }
+  if (r.entry === 'bids') {
+    const hit = [r.hitBase || '', r.hitPerTrick ? `${r.hitPerTrick === 1 ? '' : `${r.hitPerTrick} × `}${t('sum.bid')}` : ''].filter(Boolean).join(' + ') || '0';
+    lines.push(t('sum.hit', { hit }));
+    lines.push(r.missPerTrick ? t('sum.missPer', { n: r.missPerTrick }) : t('sum.miss0'));
+    if (r.trickPoints) lines.push(t('sum.trickPoints', { n: r.trickPoints }));
+    if (r.hook && r.cards !== 'none') lines.push(t('sum.hook'));
+  }
+  if (r.entry === 'contract') {
+    lines.push(t('sum.made') + (r.doubleKurtier ? ` ${t('sum.double')}` : '') + (r.halfPartner ? ` ${t('sum.half')}` : ''));
+    lines.push(t(r.fail === 'zero' ? 'sum.fail0' : 'sum.failMinus'));
+    lines.push(t('sum.others', { n: r.othersPerTrick }));
+    if (r.minHalf) lines.push(t('sum.minHalf'));
+    if (r.allTricksWins && r.target > 0) lines.push(t('sum.allTricks', { n: r.target }));
+  }
+  if (r.rounds > 0) lines.push(t('sum.rounds', { n: r.rounds }));
+  if (r.target > 0) lines.push(t('sum.target', { n: r.target }));
+  lines.push(t(r.lowWins ? 'sum.low' : 'sum.high'));
+  return lines;
+}
+
+const SOURCES = {
+  selbuvist: '<a href="https://no.wikipedia.org/wiki/Selbuvist" target="_blank" rel="noopener">Wikipedia: Selbuvist</a>',
+  amerikaner: '<a href="https://no.wikipedia.org/wiki/Amerikaner_(kortspill)" target="_blank" rel="noopener">Wikipedia: Amerikaner</a>',
+};
+
+function ruleField(key) {
+  const r = draft.rules;
+  const def = DEFAULT_RULES[key];
+  const label = tt(`rule.${key}`);
+  const hint = I18N.no[`rule.${key}.hint`] ? `<small class="muted">${tt(`rule.${key}.hint`)}</small>` : '';
+  if (typeof def === 'boolean') {
+    return `<label class="switch-row"><span>${label}${hint}</span><input type="checkbox" class="switch" data-rule="${key}"${r[key] ? ' checked' : ''}></label>`;
+  }
+  if (typeof def === 'number') {
+    return `<label class="field-row"><span>${label}${hint}</span><input type="number" inputmode="numeric" class="num" data-rule="${key}" value="${r[key]}"></label>`;
+  }
+  const opts = { entry: ['scores', 'bids', 'contract'], cards: ['none', 'updown', 'downup', 'fixed', 'deck'], fail: ['minus', 'zero'] }[key];
+  return `<div class="field-col"><span>${label}</span><div class="segmented">${opts.map((o) =>
+    `<button type="button" data-rule="${key}" data-val="${o}" class="${r[key] === o ? 'on' : ''}">${tt(`rule.${key}.${o}`)}</button>`).join('')}</div></div>`;
+}
+
+function ruleFields() {
+  const r = draft.rules;
+  const groups = [['entry']];
+  if (r.entry !== 'scores') {
+    groups.push(['cards', ...(['updown', 'downup', 'fixed'].includes(r.cards) ? ['maxCards'] : [])]);
+  }
+  if (r.entry === 'bids') groups.push(['hitBase', 'hitPerTrick', 'missPerTrick', 'trickPoints', ...(r.cards !== 'none' ? ['hook'] : [])]);
+  if (r.entry === 'contract') groups.push(['fail', 'othersPerTrick', 'doubleKurtier', 'halfPartner', 'minHalf', 'allTricksWins']);
+  groups.push(['rounds', 'target', 'lowWins']);
+  return groups.map((keys) => `<div class="rule-group">${keys.map(ruleField).join('')}</div>`).join('');
+}
+
+function renderNew() {
+  if (!draft) initDraft();
+  const r = draft.rules;
+  const editing = !!draft.edit;
+  const preset = matchPreset(r);
+  const n = draft.players.length;
+  const problem = editing ? null : playerProblem(r, n);
+  const chips = editing ? [] : candidates().slice(0, 14);
+  const back = editing ? `#/s/${route.sid}/g/${draft.edit}` : `#/s/${route.sid}`;
+  view.innerHTML = `
+    <header class="bar">
+      <a class="icon-btn" href="${back}" data-i18n-title="nav.back">${icon('back')}</a>
+      <h1>${tt(editing ? 'new.editTitle' : 'new.title')}</h1>
+      <button type="button" class="icon-btn" data-act="settings" data-i18n-title="settings.title">${icon('gear')}</button>
+    </header>
+    <main class="page">
+      <div class="stack">
+        <section>
+          <h2>${tt('new.name')}</h2>
+          <input id="gname" class="text-input" maxlength="40" autocomplete="off" value="${esc(draft.name)}" placeholder="${esc(suggestedName(r))}">
+        </section>
+
+        <section>
+          <h2>${tt('new.rules')}</h2>
+          <div class="presets" role="radiogroup" aria-label="${tt('new.presets')}">
+            ${PRESET_IDS.map((id) => `<button type="button" role="radio" aria-checked="${id === preset}" class="preset${id === preset ? ' on' : ''}" data-preset="${id}">${esc(t(`preset.${id}`))}</button>`).join('')}
+            ${preset ? '' : `<span class="preset own on" role="radio" aria-checked="true">${tt('rules.own')}</span>`}
+          </div>
+          <div class="card rules-card">
+            <ul class="rules-summary">${rulesSummary(r).map((l) => `<li>${esc(l)}</li>`).join('')}</ul>
+            ${SOURCES[preset] ? `<p class="small muted">${SOURCES[preset]}</p>` : ''}
+            <details class="rules-editor"${draft.open ? ' open' : ''}>
+              <summary>${tt('new.customize')}</summary>
+              ${ruleFields()}
+            </details>
+          </div>
+        </section>
+
+        ${editing ? `<p class="hint">${tt('new.editHint')}</p>` : `<section>
+          <h2>${tt('new.playersTitle')} <span class="muted">${n}</span></h2>
+          ${n ? `<ol class="seats">${draft.players.map((pl, i) => `
+            <li>
+              <span class="seat-no">${i + 1}</span>
+              <span class="seat-name">${esc(pl.name)}</span>
+              <button type="button" class="dealer-btn${i === draft.firstDealer ? ' on' : ''}" data-dealer="${i}" title="${tt('new.dealsFirst')}">${i === draft.firstDealer ? tt('new.dealer') : icon('cards')}</button>
+              <button type="button" class="icon-btn small" data-move="${i}" data-dir="-1" ${i === 0 ? 'disabled' : ''} data-i18n-title="new.up">${icon('up')}</button>
+              <button type="button" class="icon-btn small" data-move="${i}" data-dir="1" ${i === n - 1 ? 'disabled' : ''} data-i18n-title="new.down">${icon('down')}</button>
+              <button type="button" class="icon-btn small" data-remove="${i}" data-i18n-title="new.remove">${icon('x')}</button>
+            </li>`).join('')}</ol>` : ''}
+          <form class="add-player" id="add-form" autocomplete="off">
+            <div class="combo">
+              <input id="pname" enterkeyhint="done" maxlength="40" placeholder="${tt('new.addPlaceholder')}" aria-autocomplete="list" aria-controls="suggest" autocapitalize="words">
+              <ul id="suggest" class="suggest" role="listbox" hidden></ul>
+            </div>
+            <button class="btn" aria-label="${tt('new.add')}">${icon('plus')}</button>
+          </form>
+          ${chips.length ? `<div class="chips">${chips.map((c) => `<button type="button" class="chip" data-add="${esc(c)}">+ ${esc(c)}</button>`).join('')}</div>` : ''}
+          ${problem && n ? `<p class="hint warn">${tt(problem.key, problem)}</p>` : ''}
+        </section>`}
+      </div>
+    </main>
+    <footer class="action-bar">
+      <button type="button" class="btn primary big" id="start" ${editing || (n && !problem) ? '' : 'disabled'}>${tt(editing ? 'new.save' : 'new.start')}</button>
+    </footer>`;
+  applyI18n(view);
+  wireNew();
 }
 
 function candidates() {
@@ -368,103 +513,35 @@ function addDraftPlayer(raw) {
   draft.players.push({ pid: existing ?? null, name: existing ? s.players[existing].name : name });
 }
 
-function settingField(key, def, value) {
-  const label = tt(`set.${draft.preset}.${key}`);
-  if (typeof def === 'boolean') {
-    return `<label class="switch-row"><span>${label}</span><input type="checkbox" class="switch" data-set="${key}"${value ? ' checked' : ''}></label>`;
-  }
-  if (typeof def === 'number') {
-    return `<label class="field-row"><span>${label}</span><input type="number" inputmode="numeric" class="num" data-set="${key}" value="${value}"></label>`;
-  }
-  const opts = { order: ['up', 'down'], fail: ['minus', 'zero'] }[key] ?? [];
-  return `<div class="field-row"><span>${label}</span><div class="segmented">${opts.map((o) =>
-    `<button type="button" data-set="${key}" data-val="${o}" class="${value === o ? 'on' : ''}">${tt(`set.${draft.preset}.${key}.${o}`)}</button>`).join('')}</div></div>`;
-}
-
-function renderNew() {
-  if (!draft) initDraft();
-  const p = PRESETS[draft.preset];
-  const s = { ...p.defaults, ...draft.settings };
-  const n = draft.players.length;
-  const countOk = n >= p.min && n <= p.max;
-  const chips = candidates().slice(0, 14);
-  view.innerHTML = `
-    <header class="bar">
-      <a class="icon-btn" href="#/s/${route.sid}" data-i18n-title="nav.back">${icon('back')}</a>
-      <h1>${tt('new.title')}</h1>
-      <button type="button" class="icon-btn" data-act="settings" data-i18n-title="settings.title">${icon('gear')}</button>
-    </header>
-    <main class="page">
-      <div class="stack">
-        <section>
-          <h2>${tt('new.game')}</h2>
-          <div class="presets" role="radiogroup">
-            ${PRESET_IDS.map((id) => `<button type="button" role="radio" aria-checked="${id === draft.preset}" class="preset${id === draft.preset ? ' on' : ''}" data-preset="${id}">
-              <strong>${esc(presetName(id))}</strong><span>${tt(`preset.${id}.short`)}</span>
-              <small>${tt('new.players', { min: PRESETS[id].min, max: PRESETS[id].max })}</small></button>`).join('')}
-          </div>
-          <details class="rules"><summary>${tt('new.rules')}</summary><p>${tt(`preset.${draft.preset}.rules`)}</p>
-            ${draft.preset === 'selbuvist' ? `<p><a href="https://no.wikipedia.org/wiki/Selbuvist" target="_blank" rel="noopener">Wikipedia: Selbuvist</a> · <a href="https://kortregler.no/selbuvist" target="_blank" rel="noopener">kortregler.no</a></p>` : ''}
-            ${draft.preset === 'amerikaner' ? `<p><a href="https://no.wikipedia.org/wiki/Amerikaner_(kortspill)" target="_blank" rel="noopener">Wikipedia: Amerikaner</a></p>` : ''}
-          </details>
-        </section>
-
-        <section>
-          <h2>${tt('new.playersTitle')} <span class="muted">${n}</span></h2>
-          ${n ? `<ol class="seats">${draft.players.map((pl, i) => `
-            <li>
-              <span class="seat-no">${i + 1}</span>
-              <span class="seat-name">${esc(pl.name)}</span>
-              <button type="button" class="dealer-btn${i === draft.firstDealer ? ' on' : ''}" data-dealer="${i}" title="${tt('new.dealsFirst')}">${i === draft.firstDealer ? tt('new.dealer') : icon('cards')}</button>
-              <button type="button" class="icon-btn small" data-move="${i}" data-dir="-1" ${i === 0 ? 'disabled' : ''} data-i18n-title="new.up">${icon('up')}</button>
-              <button type="button" class="icon-btn small" data-move="${i}" data-dir="1" ${i === n - 1 ? 'disabled' : ''} data-i18n-title="new.down">${icon('down')}</button>
-              <button type="button" class="icon-btn small" data-remove="${i}" data-i18n-title="new.remove">${icon('x')}</button>
-            </li>`).join('')}</ol>` : ''}
-          <form class="add-player" id="add-form" autocomplete="off">
-            <div class="combo">
-              <input id="pname" enterkeyhint="done" maxlength="40" placeholder="${tt('new.addPlaceholder')}" aria-autocomplete="list" aria-controls="suggest" autocapitalize="words">
-              <ul id="suggest" class="suggest" role="listbox" hidden></ul>
-            </div>
-            <button class="btn" aria-label="${tt('new.add')}">${icon('plus')}</button>
-          </form>
-          ${chips.length ? `<div class="chips">${chips.map((c) => `<button type="button" class="chip" data-add="${esc(c)}">+ ${esc(c)}</button>`).join('')}</div>` : ''}
-          ${!countOk && n ? `<p class="hint warn">${tt('new.count', { min: p.min, max: p.max })}</p>` : ''}
-        </section>
-
-        <details class="card settings-card">
-          <summary>${tt('new.settings')}</summary>
-          <div class="stack tight">${Object.entries(p.defaults).map(([k, def]) => settingField(k, def, s[k])).join('')}</div>
-        </details>
-      </div>
-    </main>
-    <footer class="action-bar">
-      <button type="button" class="btn primary big" id="start" ${countOk ? '' : 'disabled'}>${tt('new.start')}</button>
-    </footer>`;
-  applyI18n(view);
-  wireNew();
+// Re-render without losing the page's scroll position.
+function rerenderNew() {
+  const y = window.scrollY;
+  draft.open = $('.rules-editor')?.open ?? draft.open;
+  renderNew();
+  window.scrollTo(0, y);
 }
 
 function wireNew() {
   const keepFocus = (fn) => () => {
     fn();
-    renderNew();
+    rerenderNew();
     $('#pname')?.focus();
   };
+  $('#gname').oninput = (e) => { draft.name = e.target.value; };
   view.onclick = (e) => {
     const b = e.target.closest('button');
     if (!b) return;
     if (b.dataset.preset) {
-      draft.preset = b.dataset.preset;
-      draft.settings = {};
-      renderNew();
+      draft.rules = presetRules(b.dataset.preset);
+      rerenderNew();
     } else if (b.dataset.add) {
       addDraftPlayer(b.dataset.add);
-      renderNew();
+      rerenderNew();
     } else if (b.dataset.remove) {
       const i = +b.dataset.remove;
       draft.players.splice(i, 1);
       if (draft.firstDealer >= draft.players.length) draft.firstDealer = 0;
-      renderNew();
+      rerenderNew();
     } else if (b.dataset.move) {
       const i = +b.dataset.move;
       const j = i + +b.dataset.dir;
@@ -472,30 +549,35 @@ function wireNew() {
       draft.players.splice(j, 0, pl);
       if (draft.firstDealer === i) draft.firstDealer = j;
       else if (draft.firstDealer === j) draft.firstDealer = i;
-      renderNew();
+      rerenderNew();
     } else if (b.dataset.dealer) {
       draft.firstDealer = +b.dataset.dealer;
-      renderNew();
-    } else if (b.dataset.set && b.dataset.val) {
-      draft.settings[b.dataset.set] = b.dataset.val;
-      for (const x of $$(`[data-set="${b.dataset.set}"]`)) x.classList.toggle('on', x === b);
+      rerenderNew();
+    } else if (b.dataset.rule && b.dataset.val) {
+      draft.rules = { ...draft.rules, ...sanitizeRules({ [b.dataset.rule]: b.dataset.val }) };
+      rerenderNew();
     }
   };
   view.onchange = (e) => {
     const el = e.target;
-    if (!el.dataset.set) return;
-    draft.settings[el.dataset.set] = el.type === 'checkbox' ? el.checked : Math.trunc(Number(el.value) || 0);
+    if (!el.dataset.rule) return;
+    const v = el.type === 'checkbox' ? el.checked : Math.trunc(Number(el.value) || 0);
+    draft.rules = { ...draft.rules, ...sanitizeRules({ [el.dataset.rule]: v }) };
+    rerenderNew();
   };
+  $('.rules-editor').ontoggle = (e) => { draft.open = e.target.open; };
+  $('#start').onclick = draft.edit ? saveEdit : startGame;
+  if (draft.edit) return;
 
   const input = $('#pname');
   const list = $('#suggest');
   let active = -1;
   const show = () => {
     const q = input.value.trim().toLocaleLowerCase();
+    const starts = (c) => c.toLocaleLowerCase().startsWith(q);
     const matches = q ? candidates().filter((c) => c.toLocaleLowerCase().includes(q))
-      .sort((a, b) => a.toLocaleLowerCase().startsWith(q) === b.toLocaleLowerCase().startsWith(q) ? 0 : a.toLocaleLowerCase().startsWith(q) ? -1 : 1)
-      .slice(0, 6) : [];
-    active = matches.length && q ? 0 : -1;
+      .sort((a, b) => Number(starts(b)) - Number(starts(a))).slice(0, 6) : [];
+    active = matches.length ? 0 : -1;
     list.innerHTML = matches.map((m, i) => `<li role="option" data-name="${esc(m)}" class="${i === active ? 'active' : ''}">${esc(m)}</li>`).join('');
     list.hidden = !matches.length;
   };
@@ -525,13 +607,10 @@ function wireNew() {
     keepFocus(() => addDraftPlayer(pick ?? input.value))();
   };
   input.onblur = () => setTimeout(() => { list.hidden = true; }, 150);
-
-  $('#start').onclick = startGame;
 }
 
 function startGame() {
-  const p = PRESETS[draft.preset];
-  if (draft.players.length < p.min || draft.players.length > p.max) return;
+  if (!draft.players.length || playerProblem(draft.rules, draft.players.length)) return;
   const s = state();
   const pids = draft.players.map((pl) => {
     if (pl.pid && s.players[pl.pid]) return pl.pid;
@@ -540,8 +619,16 @@ function startGame() {
     return pid;
   });
   const gid = newId();
-  live.dispatch({ type: 'newGame', gid, preset: draft.preset, settings: draft.settings, players: pids, firstDealer: draft.firstDealer });
+  const name = draft.name.trim() || suggestedName(draft.rules);
+  live.dispatch({ type: 'newGame', gid, name, rules: draft.rules, players: pids, firstDealer: draft.firstDealer });
   store.rememberPlayers(draft.players.map((pl) => pl.name));
+  draft = null;
+  location.replace(`#/s/${route.sid}/g/${gid}`);
+}
+
+function saveEdit() {
+  const gid = draft.edit;
+  live.dispatch({ type: 'updateGame', gid, name: draft.name.trim() || suggestedName(draft.rules), rules: draft.rules });
   draft = null;
   location.replace(`#/s/${route.sid}/g/${gid}`);
 }
@@ -570,7 +657,7 @@ function tableHtml(game, sum, { interactive = true } = {}) {
   const head = game.players.map((pid) => `<th scope="col" class="${lead.has(pid) ? 'lead' : ''}${sum.dealer === pid && !sum.done ? ' dealer' : ''}">
     <span class="pn">${esc(pname(pid))}</span>${sum.dealer === pid && !sum.done ? `<span class="deal-mark" title="${tt('game.dealer')}">${icon('cards')}</span>` : ''}</th>`).join('');
   const rows = sum.rows.map((row) => `<tr${interactive ? ` data-rid="${esc(row.round.id)}" tabindex="0"` : ''} class="${row.scores ? '' : 'pending-row'}">
-    <th scope="row" class="rn">${row.index + 1}${row.cards != null && game.preset === 'selbuvist' ? `<small>${row.cards}</small>` : ''}</th>
+    <th scope="row" class="rn">${row.index + 1}${row.cards != null && entryOf(game) === 'bids' ? `<small>${row.cards}</small>` : ''}</th>
     ${game.players.map((pid) => cellHtml(game, row, pid)).join('')}</tr>`).join('');
   const foot = game.players.map((pid) => `<td class="${lead.has(pid) ? 'lead' : ''}">
     <span class="v">${fmt(sum.totals[pid])}</span>${sum.completed ? `<span class="rank r${sum.ranks[pid]}">${sum.ranks[pid]}</span>` : ''}</td>`).join('');
@@ -587,7 +674,7 @@ function infoHtml(game, sum) {
   }
   const parts = [];
   parts.push(sum.totalRounds ? tt('game.roundOf', { n: sum.current + 1, of: sum.totalRounds }) : tt('game.round', { n: sum.current + 1 }));
-  if (sum.cards != null) parts.push(tt(game.preset === 'amerikaner' ? 'game.tricks' : 'game.cards', { n: sum.cards }));
+  if (sum.cards != null) parts.push(tt(entryOf(game) === 'contract' ? 'game.tricks' : 'game.cards', { n: sum.cards }));
   if (sum.dealer) parts.push(`${tt('game.dealer')}: <strong>${esc(pname(sum.dealer))}</strong>`);
   let extra = '';
   const r = sum.pending;
@@ -610,9 +697,10 @@ function balanceHtml(bal, game, bids) {
 
 function primaryAction(game, sum) {
   if (game.ended) return null;
-  if (game.preset === 'selbuvist' && sum.completed >= sum.totalRounds) return null;
-  if (game.preset === 'free') return { label: t('act.newRound'), mode: 'scores' };
-  if (game.preset === 'amerikaner') return sum.pending ? { label: t('act.tricks'), mode: 'atricks' } : { label: t('act.contract'), mode: 'contract' };
+  if (sum.totalRounds != null && sum.completed >= sum.totalRounds) return null;
+  const entry = entryOf(game);
+  if (entry === 'scores') return { label: t('act.newRound'), mode: 'scores' };
+  if (entry === 'contract') return sum.pending ? { label: t('act.tricks'), mode: 'atricks' } : { label: t('act.contract'), mode: 'contract' };
   return sum.pending ? { label: t('act.tricks'), mode: 'tricks' } : { label: t('act.bids'), mode: 'bids' };
 }
 
@@ -621,7 +709,7 @@ function renderGame() {
   view.innerHTML = `
     <header class="bar">
       <a class="icon-btn" href="#/s/${route.sid}" data-i18n-title="nav.back">${icon('back')}</a>
-      <h1>${esc(presetName(game.preset))}</h1>
+      <h1>${esc(gameName(game))}</h1>
       ${statusChip()}
       <button type="button" class="icon-btn" id="game-menu" data-i18n-title="game.menu">${icon('dots')}</button>
     </header>
@@ -668,7 +756,7 @@ function undo() {
   const last = game.rounds.at(-1);
   if (!last) return;
   const scored = !!scoreRound(game, last);
-  if (scored && game.preset !== 'free') {
+  if (scored && entryOf(game) !== 'scores') {
     // Back to "bids/contract entered, waiting for tricks".
     const { tricks, ...rest } = last;
     live.dispatch({ type: 'putRound', gid: game.id, round: rest });
@@ -688,8 +776,8 @@ function openRound(mode, rid) {
   const index = round ? game.rounds.indexOf(round) : game.rounds.length;
   if (mode === 'edit') {
     const complete = !!scoreRound(game, round);
-    mode = game.preset === 'free' ? 'scores'
-      : game.preset === 'amerikaner' ? complete ? 'contract+atricks' : 'contract'
+    mode = entryOf(game) === 'scores' ? 'scores'
+      : entryOf(game) === 'contract' ? complete ? 'contract+atricks' : 'contract'
         : complete ? 'bids+tricks' : 'bids';
   }
   form = {
@@ -749,11 +837,11 @@ function sheetSections(game) {
   }
 
   if (f.mode.startsWith('contract')) {
-    const total = tricksPerHand(game.players.length);
+    const total = tricksTotal(game, f.index);
     const c = f.contract;
     out.push(`<h3>${tt('am.kurtier')}</h3><div class="pchips">${game.players.map((pid) =>
       `<button type="button" class="pchip${c.kurtier === pid ? ' on' : ''}" data-g="kurtier" data-pid="${pid}">${esc(pname(pid))}</button>`).join('')}</div>`);
-    out.push(`<h3>${tt('am.bid')}</h3>${chipRow('bid', '', minBid(game), total, c.bid, ' wrap')}`);
+    out.push(`<h3>${tt('am.bid')}</h3>${chipRow('bid', '', minBid(game, f.index), total, c.bid, ' wrap')}`);
     if (c.kurtier) {
       out.push(`<h3>${tt('am.partner')}</h3><div class="pchips">${game.players.filter((pid) => pid !== c.kurtier).map((pid) =>
         `<button type="button" class="pchip${c.partner === pid ? ' on' : ''}" data-g="partner" data-pid="${pid}">${esc(pname(pid))}</button>`).join('')}
@@ -763,7 +851,7 @@ function sheetSections(game) {
 
   if (f.mode.endsWith('atricks')) {
     const c = f.contract;
-    const total = tricksPerHand(game.players.length);
+    const total = tricksTotal(game, f.index);
     if (f.mode === 'atricks') out.push(`<p class="contract-line">${tt('am.contractLine', { k: pname(c.kurtier), bid: c.bid, p: c.partner ? pname(c.partner) : t('am.alone') })}</p>`);
     if (c.kurtier && c.partner !== undefined) {
       out.push(`<h3>${tt('am.othersTricks')}</h3><div class="entry-list">${game.players.filter((pid) => pid !== c.kurtier && pid !== c.partner).map((pid) => `
@@ -777,7 +865,7 @@ function sheetSections(game) {
 function checkForm(game) {
   const f = form;
   const cards = cardsFor(game, f.index);
-  const s = settingsFor(game);
+  const s = rulesOf(game);
   const all = (obj, pids) => pids.every((pid) => Number.isInteger(obj[pid]));
   const lines = [];
   let ok = true;
@@ -820,10 +908,10 @@ function checkForm(game) {
     const others = game.players.filter((pid) => pid !== c.kurtier && pid !== c.partner);
     if (!all(f.tricks, others)) ok = false;
     else {
-      const team = teamTricks(game, { contract: c, tricks: f.tricks });
+      const team = teamTricks(game, { contract: c, tricks: f.tricks }, f.index);
       if (team < 0) {
         ok = false;
-        lines.push(`<span class="warn">${tt('am.tooMany', { n: tricksPerHand(game.players.length) })}</span>`);
+        lines.push(`<span class="warn">${tt('am.tooMany', { n: tricksTotal(game, f.index) })}</span>`);
       } else {
         lines.push(tt(team >= c.bid ? 'am.made' : 'am.failed', { n: team, bid: c.bid }));
       }
@@ -855,7 +943,7 @@ function refreshSheet() {
   if (form.mode.includes('tricks') && !form.mode.endsWith('atricks')) {
     const scores = (() => {
       try {
-        return scoreRound(game, formRound(game));
+        return scoreRound(game, formRound(game), form.index);
       } catch {
         return null;
       }
@@ -874,7 +962,7 @@ function renderSheet() {
   const dealer = dealerFor(game, form.index);
   const bodyScroll = $('.sheet-body', sheet)?.scrollTop ?? 0;
   const title = { scores: 'sheet.round', bids: 'sheet.bidsTitle', tricks: 'sheet.tricksTitle', contract: 'sheet.contractTitle', atricks: 'sheet.tricksTitle' }[form.mode] ?? 'sheet.round';
-  const meta = [cards != null && game.preset === 'selbuvist' ? tt('game.cards', { n: cards }) : '', dealer ? `${tt('game.dealer')}: ${esc(pname(dealer))}` : ''].filter(Boolean).join(' · ');
+  const meta = [cards != null && entryOf(game) === 'bids' ? tt('game.cards', { n: cards }) : '', dealer ? `${tt('game.dealer')}: ${esc(pname(dealer))}` : ''].filter(Boolean).join(' · ');
   sheet.innerHTML = `
     <form method="dialog" class="sheet-inner" id="sheet-form">
       <header class="sheet-head">
@@ -982,13 +1070,14 @@ function openGameMenu() {
   const game = state().games[route.gid];
   const item = (id, ic, label, cls = '') => `<button type="button" class="menu-item ${cls}" id="${id}">${icon(ic)}<span>${esc(label)}</span></button>`;
   openDialog('menu', `
-    <header class="dlg-head"><h2>${esc(presetName(game.preset))}</h2><button type="button" class="icon-btn" data-close data-i18n-title="nav.close">${icon('x')}</button></header>
+    <header class="dlg-head"><h2>${esc(gameName(game))}</h2><button type="button" class="icon-btn" data-close data-i18n-title="nav.close">${icon('x')}</button></header>
     <div class="menu">
       ${item('m-dash', 'tv', t('menu.dashboard'))}
       ${item('m-share', 'qr', t('session.share'))}
       ${item('m-again', 'plus', t('act.again'))}
       ${item('m-end', game.ended ? 'play' : 'flag', t(game.ended ? 'menu.reopen' : 'menu.end'))}
       ${item('m-rules', 'book', t('new.rules'))}
+      ${item('m-edit', 'edit', t('menu.edit'))}
       ${item('m-settings', 'gear', t('settings.title'))}
       ${item('m-delete', 'trash', t('menu.delete'), 'danger')}
     </div>`, () => {
@@ -997,8 +1086,12 @@ function openGameMenu() {
     $('#m-again').onclick = () => { dlg.close(); go(`#/s/${route.sid}/new?from=${game.id}`); };
     $('#m-end').onclick = () => { live.dispatch({ type: 'endGame', gid: game.id, ended: !game.ended }); dlg.close(); };
     $('#m-rules').onclick = () => openDialog('rules', `
-      <header class="dlg-head"><h2>${esc(presetName(game.preset))}</h2><button type="button" class="icon-btn" data-close data-i18n-title="nav.close">${icon('x')}</button></header>
-      <p>${tt(`preset.${game.preset}.rules`)}</p>`);
+      <header class="dlg-head"><h2>${esc(gameName(game))}</h2><button type="button" class="icon-btn" data-close data-i18n-title="nav.close">${icon('x')}</button></header>
+      <ul class="rules-summary">${rulesSummary(rulesOf(game)).map((l) => `<li>${esc(l)}</li>`).join('')}</ul>
+      <button type="button" class="btn" id="m-edit2">${icon('edit')}${tt('menu.edit')}</button>`, () => {
+      $('#m-edit2').onclick = () => { dlg.close(); go(`#/s/${route.sid}/g/${game.id}/edit`); };
+    });
+    $('#m-edit').onclick = () => { dlg.close(); go(`#/s/${route.sid}/g/${game.id}/edit`); };
     $('#m-settings').onclick = () => openSettings();
     $('#m-delete').onclick = () => {
       if (!confirm(t('menu.deleteConfirm'))) return;
@@ -1221,7 +1314,7 @@ function renderDash() {
   view.innerHTML = `
     <div class="dash">
       <header class="dash-head">
-        <div><h1>${esc(presetName(game.preset))}</h1><div class="dash-info">${infoHtml(game, sum)}</div></div>
+        <div><h1>${esc(gameName(game))}</h1><div class="dash-info">${infoHtml(game, sum)}</div></div>
         <a class="icon-btn exit" href="${exit}" data-i18n-title="dash.exit">${icon('x')}</a>
       </header>
       <div class="dash-body">

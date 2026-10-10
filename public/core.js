@@ -3,7 +3,7 @@
 // must never throw on bad input: events from other devices are untrusted and
 // are sanitized here, malformed ones are ignored.
 
-import { PRESETS, sanitizeSettings } from './rules.js';
+import { sanitizeRules, MAX_PLAYERS } from './rules.js';
 
 export const EVENT_TYPES = [
   'addPlayer', 'renamePlayer',
@@ -12,7 +12,6 @@ export const EVENT_TYPES = [
 ];
 
 const TYPES = new Set(EVENT_TYPES);
-const MAX_PLAYERS = 12;
 
 export function isValidEvent(ev) {
   return !!ev && typeof ev === 'object' && !Array.isArray(ev)
@@ -78,12 +77,12 @@ const HANDLERS = {
   },
   newGame(s, e) {
     const id = str(e.gid);
-    if (!id || s.games[id] || !PRESETS[e.preset]) return;
+    if (!id || s.games[id]) return;
     const players = playerList(s, e.players);
     s.games[id] = {
       id,
-      preset: e.preset,
-      settings: sanitizeSettings(e.preset, e.settings),
+      name: str(e.name, 40),
+      rules: sanitizeRules(e.rules),
       players,
       firstDealer: Math.max(0, int(e.firstDealer) ?? 0) % Math.max(1, players.length),
       rounds: [],
@@ -96,7 +95,8 @@ const HANDLERS = {
   updateGame(s, e) {
     const g = s.games[e.gid];
     if (!g) return;
-    if (e.settings) g.settings = sanitizeSettings(g.preset, { ...g.settings, ...e.settings });
+    if (typeof e.name === 'string') g.name = str(e.name, 40);
+    if (e.rules) g.rules = sanitizeRules({ ...g.rules, ...e.rules });
     if (e.players) {
       const players = playerList(s, e.players);
       if (players.length) g.players = players;
