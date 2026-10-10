@@ -23,8 +23,6 @@ export const DEFAULT_RULES = {
   hitPerTrick: 1,
   missPerTrick: 0,
   trickPoints: 0,
-  // The dealer bids last and may not make the bids add up to the cards.
-  hook: false,
   // contract: made = +bid to kurtier and partner, failed = −bid (or 0).
   // Everyone else gets othersPerTrick per trick.
   fail: 'minus',

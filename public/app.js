@@ -373,7 +373,6 @@ function rulesSummary(r) {
     lines.push(t('sum.hit', { hit }));
     lines.push(r.missPerTrick ? t('sum.missPer', { n: r.missPerTrick }) : t('sum.miss0'));
     if (r.trickPoints) lines.push(t('sum.trickPoints', { n: r.trickPoints }));
-    if (r.hook && r.cards !== 'none') lines.push(t('sum.hook'));
   }
   if (r.entry === 'contract') {
     lines.push(t('sum.made') + (r.doubleKurtier ? ` ${t('sum.double')}` : '') + (r.halfPartner ? ` ${t('sum.half')}` : ''));
@@ -415,7 +414,7 @@ function ruleFields() {
   if (r.entry !== 'scores') {
     groups.push(['cards', ...(['updown', 'downup', 'fixed'].includes(r.cards) ? ['maxCards'] : [])]);
   }
-  if (r.entry === 'bids') groups.push(['hitBase', 'hitPerTrick', 'missPerTrick', 'trickPoints', ...(r.cards !== 'none' ? ['hook'] : [])]);
+  if (r.entry === 'bids') groups.push(['hitBase', 'hitPerTrick', 'missPerTrick', 'trickPoints']);
   if (r.entry === 'contract') groups.push(['fail', 'othersPerTrick', 'doubleKurtier', 'halfPartner', 'minHalf', 'allTricksWins']);
   groups.push(['rounds', 'target', 'lowWins']);
   return groups.map((keys) => `<div class="rule-group">${keys.map(ruleField).join('')}</div>`).join('');
@@ -865,7 +864,6 @@ function sheetSections(game) {
 function checkForm(game) {
   const f = form;
   const cards = cardsFor(game, f.index);
-  const s = rulesOf(game);
   const all = (obj, pids) => pids.every((pid) => Number.isInteger(obj[pid]));
   const lines = [];
   let ok = true;
@@ -879,10 +877,6 @@ function checkForm(game) {
     const bal = bidBalance(game, f.bids, f.index);
     if (bal != null && Object.keys(f.bids).length) {
       lines.push(balanceHtml(bal, game, f.bids));
-      if (s.hook && bal === 0 && all(f.bids, game.players)) {
-        ok = false;
-        lines.push(`<span class="warn">${tt('bids.hook', { name: pname(dealerFor(game, f.index)) })}</span>`);
-      }
     }
   }
   if (f.mode.endsWith('tricks') && !f.mode.endsWith('atricks')) {
