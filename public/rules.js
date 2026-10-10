@@ -33,6 +33,9 @@ export const DEFAULT_RULES = {
   // Whether the kurtier may bid every trick alone (marked 🌟). Bidding
   // every trick *with* a partner is an ordinary bid.
   allAlone: true,
+  // What a made 🌟 scores, and what a failed one loses (per `fail`). 0 =
+  // score it like an ordinary bid of every trick.
+  allAlonePoints: 52,
   othersPerTrick: 1,
   // End: when the card sequence runs out, when someone reaches `target`
   // (0 = no target), or when the game is ended by hand.
@@ -53,7 +56,7 @@ const CHOICES = {
   cards: ['none', 'updown', 'downup', 'fixed', 'deck'],
   fail: ['minus', 'zero'],
 };
-const RANGES = { maxCards: [1, 52], minBid: [0, 52], target: [0, 100000] };
+const RANGES = { maxCards: [1, 52], minBid: [0, 52], allAlonePoints: [0, 1000], target: [0, 100000] };
 
 export const presetRules = (id) => ({ ...DEFAULT_RULES, ...PRESETS[id] });
 
@@ -212,9 +215,12 @@ export function computeRound(game, round, i = game.rounds.indexOf(round)) {
   } else {
     const { kurtier, partner, bid } = round.contract;
     const made = teamTricks(game, round, i) >= bid;
-    const team = made ? bid : r.fail === 'zero' ? 0 : -bid;
+    // A 🌟 has its own value (never doubled); otherwise the bid itself.
+    const star = isAllAlone(game, round.contract, i);
+    const worth = star && r.allAlonePoints > 0 ? r.allAlonePoints : bid;
+    const team = made ? worth : r.fail === 'zero' ? 0 : -worth;
     for (const pid of game.players) out[pid] = (round.tricks[pid] ?? 0) * r.othersPerTrick;
-    out[kurtier] = r.doubleKurtier ? team * 2 : team;
+    out[kurtier] = r.doubleKurtier && !star ? team * 2 : team;
     if (partner && partner !== kurtier) out[partner] = r.halfPartner ? Math.trunc(team / 2) : team;
   }
   return out;

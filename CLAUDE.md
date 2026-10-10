@@ -90,7 +90,9 @@ don't reuse its names, D1 database or rate-limit namespace (`1001`).
 - **🌟 bids:** a contract with `partner: null` and `bid >= tricks` is
   "every trick, alone" (`isAllAlone()`), only where `allAlone` is on. Bidding
   every trick *with* a partner is an ordinary bid. The sheet shows the 🌟 as
-  its own option after the number chips.
+  its own option after the number chips. It scores `allAlonePoints` (52 for
+  Amerikaner; made = +, failed = − or 0 per `fail`; 0 = like a normal bid),
+  never doubled; reaching the target (52) ends the game.
 - **Overrides:** a scored round can carry `override: { pid: points }`
   ("Overstyr poeng" in the sheet); `scoreRound()` applies it on top of
   `computeRound()`. Undo strips it with the tricks.

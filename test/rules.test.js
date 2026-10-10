@@ -55,12 +55,14 @@ test('amerikaner: failed contract is -bid, or 0 as house rule', () => {
   assert.deepEqual(scoreRound(g2, g2.rounds[0]), { a: 0, b: 3, c: 0, d: 2 });
 });
 
-test('amerikaner: taking every trick alone is just the top bid; minimum bid', () => {
+test('amerikaner: 🌟 scores its own points; minimum bid', () => {
   const s = reduce([...players('a', 'b', 'c', 'd'), game('amerikaner', ['a', 'b', 'c', 'd']),
     round({ id: 'r1', contract: { kurtier: 'a', partner: null, bid: 13 }, tricks: { b: 0, c: 0, d: 0 } })]);
   const g = s.games.g;
-  assert.equal(summarize(g).totals.a, 13);
-  assert.equal(summarize(g).done, false);
+  assert.equal(summarize(g).totals.a, 52);
+  // 52 is Amerikaner's target, so a made 🌟 wins the game.
+  assert.equal(summarize(g).done, true);
+  assert.deepEqual(summarize(g).winners, ['a']);
   assert.equal(minBid(g, 0), 1);
   const g2 = reduce([...players('a', 'b', 'c', 'd'), game('amerikaner', ['a', 'b', 'c', 'd'], { minBid: 7 })]).games.g;
   assert.equal(minBid(g2, 0), 7);
@@ -174,4 +176,21 @@ test('🌟 is every trick alone and only where the rules allow it', () => {
   assert.equal(isAllAlone(g, { kurtier: 'a', partner: 'b', bid: 13 }, 0), false);
   assert.equal(isAllAlone(g, { kurtier: 'a', partner: null, bid: 12 }, 0), false);
   assert.equal(isAllAlone(mk({ allAlone: false }), { kurtier: 'a', partner: null, bid: 13 }, 0), false);
+});
+
+test('🌟 points: made, failed, zero-miss, and 0 = like a normal bid', () => {
+  const run = (rules, tricksOthers) => {
+    const g = reduce([...players('a', 'b', 'c', 'd'), game('amerikaner', ['a', 'b', 'c', 'd'], rules),
+      round({ id: 'r1', contract: { kurtier: 'a', partner: null, bid: 13 }, tricks: tricksOthers })]).games.g;
+    return scoreRound(g, g.rounds[0]);
+  };
+  assert.equal(run({}, { b: 0, c: 0, d: 0 }).a, 52);
+  assert.deepEqual(run({}, { b: 1, c: 0, d: 0 }), { a: -52, b: 1, c: 0, d: 0 });
+  assert.equal(run({ fail: 'zero' }, { b: 1, c: 0, d: 0 }).a, 0);
+  assert.equal(run({ allAlonePoints: 0 }, { b: 0, c: 0, d: 0 }).a, 13);
+  assert.equal(run({ allAlonePoints: 100, doubleKurtier: true }, { b: 0, c: 0, d: 0 }).a, 100);
+  // With a partner it is an ordinary 13 bid.
+  const g = reduce([...players('a', 'b', 'c', 'd'), game('amerikaner', ['a', 'b', 'c', 'd']),
+    round({ id: 'r1', contract: { kurtier: 'a', partner: 'b', bid: 13 }, tricks: { c: 0, d: 0 } })]).games.g;
+  assert.deepEqual(scoreRound(g, g.rounds[0]), { a: 13, b: 13, c: 0, d: 0 });
 });

@@ -428,7 +428,7 @@ function rulesSummary(r) {
     lines.push(t(r.fail === 'zero' ? 'sum.fail0' : 'sum.failMinus'));
     lines.push(t('sum.others', { n: r.othersPerTrick }));
     if (r.minBid > 1) lines.push(t('sum.minBid', { n: r.minBid }));
-    if (r.allAlone) lines.push(t('sum.allAlone'));
+    if (r.allAlone) lines.push(r.allAlonePoints > 0 ? t('sum.allAlonePts', { n: r.allAlonePoints }) : t('sum.allAlone'));
   }
   if (r.target > 0) lines.push(t('sum.target', { n: r.target }));
   lines.push(t(r.lowWins ? 'sum.low' : 'sum.high'));
@@ -483,7 +483,7 @@ function ruleFields() {
     groups.push(['cards', ...(['updown', 'downup', 'fixed'].includes(r.cards) ? ['maxCards'] : [])]);
   }
   if (r.entry === 'bids') groups.push(['hitBase', 'hitPerTrick', 'missPerTrick', 'trickPoints']);
-  if (r.entry === 'contract') groups.push(['fail', 'othersPerTrick', 'doubleKurtier', 'halfPartner', 'minBid', 'allAlone']);
+  if (r.entry === 'contract') groups.push(['fail', 'othersPerTrick', 'doubleKurtier', 'halfPartner', 'minBid', 'allAlone', ...(r.allAlone ? ['allAlonePoints'] : [])]);
   groups.push(['target', 'lowWins']);
   return groups.map((keys) => `<div class="rule-group">${keys.map(ruleField).join('')}</div>`).join('');
 }
