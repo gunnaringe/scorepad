@@ -100,13 +100,19 @@ test('presets are just rules; edits stop matching', () => {
   assert.equal(matchPreset({}), 'free');
 });
 
-test('mixed rules: bids with fixed cards, trick points and a round limit', () => {
-  const s = reduce([...players('a', 'b', 'c'), game('free', ['a', 'b', 'c'], { entry: 'bids', cards: 'fixed', maxCards: 5, trickPoints: 1, hitBase: 5, hitPerTrick: 0, rounds: 1 }),
+test('mixed rules: bids with fixed cards and trick points; ending by hand', () => {
+  const s = reduce([...players('a', 'b', 'c'), game('free', ['a', 'b', 'c'], { entry: 'bids', cards: 'fixed', maxCards: 5, trickPoints: 1, hitBase: 5, hitPerTrick: 0 }),
     round({ id: 'r1', bids: { a: 2, b: 1, c: 1 }, tricks: { a: 2, b: 3, c: 0 } })]);
   const g = s.games.g;
   assert.equal(cardsFor(g, 3), 5);
   assert.deepEqual(scoreRound(g, g.rounds[0]), { a: 7, b: 3, c: 0 });
-  assert.equal(summarize(g).done, true);
+  assert.equal(summarize(g).done, false);
+  const ended = reduce([...players('a', 'b', 'c'), game('free', ['a', 'b', 'c'], { entry: 'bids', cards: 'fixed', maxCards: 5, trickPoints: 1, hitBase: 5, hitPerTrick: 0 }),
+    round({ id: 'r1', bids: { a: 2, b: 1, c: 1 }, tricks: { a: 2, b: 3, c: 0 } }), { id: 'ev-end', type: 'endGame', gid: 'g', ended: true }]).games.g;
+  const sum = summarize(ended);
+  assert.equal(sum.done, true);
+  assert.deepEqual(sum.sorted, ['a', 'b', 'c']);
+  assert.deepEqual(sum.winners, ['a']);
 });
 
 test('changing rules mid-game rescores old rounds', () => {

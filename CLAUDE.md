@@ -70,6 +70,11 @@ don't reuse its names, D1 database or rate-limit namespace (`1001`).
   `disabled`: it's `aria-disabled` and, when tapped, marks what's missing.
   If another device changes the round while the sheet is open
   (`sheetSig`/`checkStale`), saving is blocked until "Oppdater".
+- **Ending:** a game is done when the card sequence runs out, someone
+  reaches `target`, or it's ended by hand (`endGame`: the link under the
+  last round or the menu). Done games show `resultsHtml()` (podium for the
+  top three, ties share a medal, then the rest) instead of the table, with a
+  Tabell/Resultat toggle; the big screen shows the same podium.
 - **Devices aren't players.** Connections are listed only under Settings →
   Connection. The dashboard is a view mode (`#/s/:sid/dash`, or
   `/s/CODE?view=dashboard` from a link), not a role.

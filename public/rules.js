@@ -32,9 +32,8 @@ export const DEFAULT_RULES = {
   othersPerTrick: 1,
   // Taking every trick scores the target, i.e. wins outright.
   allTricksWins: true,
-  // End: after `rounds` rounds (0 = when the card sequence runs out, or
-  // never), or when someone reaches `target` (0 = no target).
-  rounds: 0,
+  // End: when the card sequence runs out, when someone reaches `target`
+  // (0 = no target), or when the game is ended by hand.
   target: 0,
   lowWins: false,
 };
@@ -52,7 +51,7 @@ const CHOICES = {
   cards: ['none', 'updown', 'downup', 'fixed', 'deck'],
   fail: ['minus', 'zero'],
 };
-const RANGES = { maxCards: [1, 52], rounds: [0, 500], target: [0, 100000] };
+const RANGES = { maxCards: [1, 52], target: [0, 100000] };
 
 export const presetRules = (id) => ({ ...DEFAULT_RULES, ...PRESETS[id] });
 
@@ -119,9 +118,7 @@ export function tricksTotal(game, i) {
 }
 
 export function totalRounds(game) {
-  const r = rulesOf(game);
-  if (r.rounds > 0) return r.rounds;
-  return sequence(r)?.length ?? null;
+  return sequence(rulesOf(game))?.length ?? null;
 }
 
 // The most cards dealt per player in any round (for "enough cards?").

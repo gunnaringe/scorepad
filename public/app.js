@@ -421,7 +421,6 @@ function rulesSummary(r) {
     if (r.minHalf) lines.push(t('sum.minHalf'));
     if (r.allTricksWins && r.target > 0) lines.push(t('sum.allTricks', { n: r.target }));
   }
-  if (r.rounds > 0) lines.push(t('sum.rounds', { n: r.rounds }));
   if (r.target > 0) lines.push(t('sum.target', { n: r.target }));
   lines.push(t(r.lowWins ? 'sum.low' : 'sum.high'));
   return lines;
@@ -436,7 +435,6 @@ function compactSummary(r) {
     parts.push(r.missPerTrick ? t('cs.missPer', { n: r.missPerTrick }) : t('cs.miss0'));
   }
   if (r.entry === 'contract') parts.push(t(r.fail === 'zero' ? 'cs.fail0' : 'cs.failMinus'));
-  if (r.rounds > 0) parts.push(t('cs.rounds', { n: r.rounds }));
   if (r.target > 0) parts.push(t('cs.target', { n: r.target }));
   if (r.lowWins) parts.push(t('cs.low'));
   return parts.join(' · ');
@@ -471,7 +469,7 @@ function ruleFields() {
   }
   if (r.entry === 'bids') groups.push(['hitBase', 'hitPerTrick', 'missPerTrick', 'trickPoints']);
   if (r.entry === 'contract') groups.push(['fail', 'othersPerTrick', 'doubleKurtier', 'halfPartner', 'minHalf', 'allTricksWins']);
-  groups.push(['rounds', 'target', 'lowWins']);
+  groups.push(['target', 'lowWins']);
   return groups.map((keys) => `<div class="rule-group">${keys.map(ruleField).join('')}</div>`).join('');
 }
 
@@ -721,12 +719,37 @@ function tableHtml(game, sum, { interactive = true } = {}) {
   const foot = game.players.map((pid) => `<td class="${lead.has(pid) ? 'lead' : ''}">
     <span class="v">${fmt(sum.totals[pid])}</span>${sum.completed ? `<span class="rank r${sum.ranks[pid]}">${sum.ranks[pid]}</span>` : ''}</td>`).join('');
   const cols = game.players.length + 1;
+  const endLink = interactive && !sum.done && sum.completed ? `<button type="button" class="link end-link" id="end-game">${icon('flag')}${tt('menu.end')}</button>` : '';
   return `<table class="score">
     <thead><tr><th class="corner" scope="col">#</th>${head}</tr></thead>
     <tbody>${rows || `<tr class="empty-row"><td colspan="${cols}">${tt('table.empty')}</td></tr>`}
-      <tr class="filler" aria-hidden="true"><td colspan="${cols}"></td></tr></tbody>
+      <tr class="filler"><td colspan="${cols}">${endLink}</td></tr></tbody>
     <tfoot><tr><th scope="row" class="corner">Σ</th>${foot}</tr></tfoot>
   </table>`;
+}
+
+// A finished game shows its results; this remembers who flipped to the table.
+const showTable = {};
+
+// Podium for places 1–3 (ties share a medal) and the rest in a list. The
+// podium is in rank order in the DOM; CSS puts 2nd left and 3rd right.
+function resultsHtml(game, sum) {
+  const medal = (rank) => ['🥇', '🥈', '🥉'][rank - 1] ?? '';
+  const top = sum.sorted.slice(0, 3);
+  const rest = sum.sorted.slice(3);
+  return `<section class="results" aria-labelledby="res-title">
+    <h2 id="res-title">${tt('results.title')}</h2>
+    <ol class="podium">${top.map((pid, i) => `
+      <li class="place pos${i + 1} rank${Math.min(sum.ranks[pid], 3)}">
+        <span class="medal" aria-hidden="true">${medal(sum.ranks[pid])}</span>
+        <span class="place-name">${esc(pname(pid))}</span>
+        <span class="place-score">${fmt(sum.totals[pid])}</span>
+        <span class="place-step"><span class="sr">${tt('results.place', { n: sum.ranks[pid] })}</span><span aria-hidden="true">${sum.ranks[pid]}</span></span>
+      </li>`).join('')}</ol>
+    ${rest.length ? `<ol class="rest">${rest.map((pid) => `
+      <li><span class="rest-rank">${sum.ranks[pid]}</span><span class="rest-name">${esc(pname(pid))}</span><span class="rest-score">${fmt(sum.totals[pid])}</span></li>`).join('')}</ol>` : ''}
+    <p class="muted center small">${tt(sum.completed === 1 ? 'results.round1' : 'results.rounds', { n: sum.completed })}</p>
+  </section>`;
 }
 
 const EDIT_HINT = 'scorepad-hint-edit-v1';
@@ -824,18 +847,41 @@ function updateGame(first = false) {
   const sum = summarize(game);
   $('#gi').innerHTML = infoHtml(game, sum);
   const scroller = $('#gt');
+  const results = sum.done && !showTable[game.id];
+  const wasResults = $('#tw').classList.contains('is-results');
   const atBottom = scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 8;
-  scroller.innerHTML = tableHtml(game, sum);
-  // Follow new rounds, like a pad filling up.
-  if (first || atBottom) scroller.scrollTop = scroller.scrollHeight;
+  scroller.innerHTML = results ? resultsHtml(game, sum) : tableHtml(game, sum);
+  $('#tw').classList.toggle('is-results', results);
+  // Follow new rounds, like a pad filling up; results start at the top.
+  if (results) {
+    if (!wasResults) scroller.scrollTop = 0;
+  } else if (first || atBottom || wasResults) scroller.scrollTop = scroller.scrollHeight;
   edgeFade();
-  const act = primaryAction(game, sum);
-  $('#ga').innerHTML = `
-    ${game.rounds.length && !game.ended ? `<button type="button" class="btn" id="undo">${icon('undo')}${tt('act.undo')}</button>` : ''}
-    ${act ? `<button type="button" class="btn primary big grow" id="primary">${esc(act.label)}</button>` : ''}
-    ${sum.done ? `<a class="btn primary big grow" href="#/s/${route.sid}/new?from=${game.id}">${tt('act.again')}</a>` : ''}`;
-  if (act) $('#primary').onclick = () => openRound(act.mode);
+  $('#end-game')?.addEventListener('click', () => endGame(game));
+  if (sum.done) {
+    $('#ga').innerHTML = `
+      ${game.rounds.length && !game.ended ? `<button type="button" class="btn icon-only" id="undo" data-i18n-title="act.undo">${icon('undo')}</button>` : ''}
+      <button type="button" class="btn" id="flip">${icon(results ? 'table' : 'trophy')}${tt(results ? 'act.showTable' : 'act.showResults')}</button>
+      <a class="btn primary big grow" href="#/s/${route.sid}/new?from=${game.id}">${tt('act.again')}</a>`;
+    applyI18n($('#ga'));
+    $('#flip').onclick = () => {
+      showTable[game.id] = results;
+      updateGame();
+    };
+  } else {
+    const act = primaryAction(game, sum);
+    $('#ga').innerHTML = `
+      ${game.rounds.length ? `<button type="button" class="btn" id="undo">${icon('undo')}${tt('act.undo')}</button>` : ''}
+      ${act ? `<button type="button" class="btn primary big grow" id="primary">${esc(act.label)}</button>` : ''}`;
+    if (act) $('#primary').onclick = () => openRound(act.mode);
+  }
   $('#undo')?.addEventListener('click', undo);
+}
+
+function endGame(game) {
+  if (!confirm(t('menu.endConfirm'))) return;
+  showTable[game.id] = false;
+  live.dispatch({ type: 'endGame', gid: game.id, ended: true });
 }
 
 function undo() {
@@ -1448,11 +1494,11 @@ function openGameMenu() {
   openDialog('menu', `
     <header class="dlg-head"><h2>${esc(gameName(game))}</h2><button type="button" class="icon-btn" data-close data-i18n-title="nav.close">${icon('x')}</button></header>
     <div class="menu">
+      ${item('m-end', game.ended ? 'play' : 'flag', t(game.ended ? 'menu.reopen' : 'menu.end'))}
       ${item('m-rules', 'book', t('menu.rules'))}
       ${item('m-dash', 'tv', t('menu.dashboard'))}
       ${item('m-share', 'qr', t('session.share'))}
       ${sum.done ? item('m-again', 'plus', t('act.again')) : ''}
-      ${item('m-end', game.ended ? 'play' : 'flag', t(game.ended ? 'menu.reopen' : 'menu.end'))}
       ${item('m-settings', 'gear', t('settings.title'))}
       ${item('m-delete', 'trash', t('menu.delete'), 'danger')}
     </div>`, () => {
@@ -1460,7 +1506,11 @@ function openGameMenu() {
     $('#m-dash').onclick = () => { dlg.close(); go(`#/s/${route.sid}/g/${game.id}/dash`); };
     $('#m-share').onclick = () => openShare();
     $('#m-again')?.addEventListener('click', () => { dlg.close(); go(`#/s/${route.sid}/new?from=${game.id}`); });
-    $('#m-end').onclick = () => { live.dispatch({ type: 'endGame', gid: game.id, ended: !game.ended }); dlg.close(); };
+    $('#m-end').onclick = () => {
+      dlg.close();
+      if (game.ended) live.dispatch({ type: 'endGame', gid: game.id, ended: false });
+      else endGame(game);
+    };
     $('#m-settings').onclick = () => openSettings();
     $('#m-delete').onclick = () => {
       if (!confirm(t('menu.deleteConfirm'))) return;
@@ -1684,8 +1734,8 @@ function renderDash() {
       </header>
       <div class="dash-body">
         <div class="dash-side">
-          ${last ? `<p class="board-legend">${tt('dash.lastRound')}</p>` : ''}
-          <ol class="board">${board}</ol>
+          ${sum.done ? resultsHtml(game, sum) : `${last ? `<p class="board-legend">${tt('dash.lastRound')}</p>` : ''}
+          <ol class="board">${board}</ol>`}
         </div>
         <div class="dash-table table-scroll">${tableHtml(game, sum, { interactive: false })}</div>
       </div>
