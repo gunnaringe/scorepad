@@ -28,9 +28,11 @@ export const DEFAULT_RULES = {
   fail: 'minus',
   doubleKurtier: false,
   halfPartner: false,
-  // Lowest allowed bid in tricks (0 = no minimum). The highest is taking
-  // every trick, which you do alone.
+  // Lowest allowed bid in tricks (0 = no minimum).
   minBid: 0,
+  // Whether the kurtier may bid every trick alone (marked 🌟). Bidding
+  // every trick *with* a partner is an ordinary bid.
+  allAlone: true,
   othersPerTrick: 1,
   // End: when the card sequence runs out, when someone reaches `target`
   // (0 = no target), or when the game is ended by hand.
@@ -180,6 +182,12 @@ export function scoreRound(game, round, i = game.rounds.indexOf(round)) {
     for (const pid of game.players) if (Number.isInteger(round.override[pid])) out[pid] = round.override[pid];
   }
   return out;
+}
+
+// A 🌟 bid: every trick, alone, where the rules allow it.
+export function isAllAlone(game, contract, i) {
+  return rulesOf(game).allAlone && !!contract && contract.partner === null
+    && Number.isInteger(contract.bid) && contract.bid >= tricksTotal(game, i);
 }
 
 // The scores the rules give, before any override.

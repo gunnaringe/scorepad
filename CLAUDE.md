@@ -87,6 +87,10 @@ don't reuse its names, D1 database or rate-limit namespace (`1001`).
   only in Settings (`refreshConnection()`), for a shared game night.
 - **Devices aren't players.** The big screen is a view mode
   (`#/s/:sid/dash`, or `/s/CODE?view=dashboard` from a link), not a role.
+- **🌟 bids:** a contract with `partner: null` and `bid >= tricks` is
+  "every trick, alone" (`isAllAlone()`), only where `allAlone` is on. Bidding
+  every trick *with* a partner is an ordinary bid. The sheet shows the 🌟 as
+  its own option after the number chips.
 - **Overrides:** a scored round can carry `override: { pid: points }`
   ("Overstyr poeng" in the sheet); `scoreRound()` applies it on top of
   `computeRound()`. Undo strips it with the tricks.

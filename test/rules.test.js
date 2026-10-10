@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { reduce } from '../public/core.js';
-import { scoreRound, computeRound, minBid, summarize, cardsFor, bidBalance, tricksTotal, presetRules, matchPreset, playerProblem, sanitizeRules } from '../public/rules.js';
+import { scoreRound, computeRound, isAllAlone, minBid, summarize, cardsFor, bidBalance, tricksTotal, presetRules, matchPreset, playerProblem, sanitizeRules } from '../public/rules.js';
 
 const players = (...names) => names.map((n) => ({ id: `ev-${n}`, type: 'addPlayer', pid: n, name: n.toUpperCase() }));
 const game = (preset, pids, rules = {}, extra = {}) => ({ id: 'ev-g', type: 'newGame', gid: 'g', name: preset, rules: { ...presetRules(preset), ...rules }, players: pids, at: 1, ...extra });
@@ -165,4 +165,13 @@ test('players can be added, removed and renamed mid-game', () => {
   const s2 = reduce([...base, { id: 'ev-r', type: 'renamePlayer', pid: 'a', name: 'Anne' }, { id: 'ev-q', type: 'updateGame', gid: 'g', players: ['a'] }]);
   assert.equal(s2.players.a.name, 'Anne');
   assert.deepEqual(summarize(s2.games.g).totals, { a: 11 });
+});
+
+test('🌟 is every trick alone and only where the rules allow it', () => {
+  const mk = (rules) => reduce([...players('a', 'b', 'c', 'd'), game('amerikaner', ['a', 'b', 'c', 'd'], rules)]).games.g;
+  const g = mk({});
+  assert.equal(isAllAlone(g, { kurtier: 'a', partner: null, bid: 13 }, 0), true);
+  assert.equal(isAllAlone(g, { kurtier: 'a', partner: 'b', bid: 13 }, 0), false);
+  assert.equal(isAllAlone(g, { kurtier: 'a', partner: null, bid: 12 }, 0), false);
+  assert.equal(isAllAlone(mk({ allAlone: false }), { kurtier: 'a', partner: null, bid: 13 }, 0), false);
 });

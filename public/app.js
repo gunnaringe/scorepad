@@ -12,7 +12,7 @@
 
 import {
   DEFAULT_RULES, PRESET_IDS, presetRules, rulesOf, matchPreset, sanitizeRules, playerProblem,
-  summarize, cardsFor, tricksTotal, teamTricks, minBid, scoreRound, computeRound, bidBalance, dealerFor,
+  summarize, cardsFor, tricksTotal, teamTricks, minBid, scoreRound, computeRound, bidBalance, dealerFor, isAllAlone,
 } from './rules.js';
 import { newId, reduce } from './core.js';
 import * as store from './store.js';
@@ -428,6 +428,7 @@ function rulesSummary(r) {
     lines.push(t(r.fail === 'zero' ? 'sum.fail0' : 'sum.failMinus'));
     lines.push(t('sum.others', { n: r.othersPerTrick }));
     if (r.minBid > 1) lines.push(t('sum.minBid', { n: r.minBid }));
+    if (r.allAlone) lines.push(t('sum.allAlone'));
   }
   if (r.target > 0) lines.push(t('sum.target', { n: r.target }));
   lines.push(t(r.lowWins ? 'sum.low' : 'sum.high'));
@@ -482,7 +483,7 @@ function ruleFields() {
     groups.push(['cards', ...(['updown', 'downup', 'fixed'].includes(r.cards) ? ['maxCards'] : [])]);
   }
   if (r.entry === 'bids') groups.push(['hitBase', 'hitPerTrick', 'missPerTrick', 'trickPoints']);
-  if (r.entry === 'contract') groups.push(['fail', 'othersPerTrick', 'doubleKurtier', 'halfPartner', 'minBid']);
+  if (r.entry === 'contract') groups.push(['fail', 'othersPerTrick', 'doubleKurtier', 'halfPartner', 'minBid', 'allAlone']);
   groups.push(['target', 'lowWins']);
   return groups.map((keys) => `<div class="rule-group">${keys.map(ruleField).join('')}</div>`).join('');
 }
@@ -767,7 +768,7 @@ function cellHtml(game, row, pid) {
   const r = row.round;
   let sub = '';
   if (r.contract) {
-    if (r.contract.kurtier === pid) sub = `<span class="role">${tt('am.kurtier')} ${r.contract.bid}</span>`;
+    if (r.contract.kurtier === pid) sub = `<span class="role">${isAllAlone(game, r.contract, row.index) ? '🌟' : `${tt('am.kurtier')} ${r.contract.bid}`}</span>`;
     else if (r.contract.partner === pid) sub = `<span class="role">${tt('am.partner')}</span>`;
   } else if (r.bids && pid in r.bids) {
     sub = r.tricks ? `${r.bids[pid]}/${r.tricks[pid] ?? 0}${r.bids[pid] === r.tricks[pid] ? ' ✓' : ''}` : `${tt('table.bid')} ${r.bids[pid]}`;
@@ -843,7 +844,7 @@ function infoHtml(game, sum) {
     extra = bidsLine(game, r.bids, sum.current);
   } else if (r?.contract) {
     const c = r.contract;
-    extra = tt('am.contractLine', { k: pname(c.kurtier), bid: c.bid, p: c.partner ? pname(c.partner) : t('am.alone') });
+    extra = contractLine(game, c, sum.current);
   } else if (sum.completed && route.name === 'game' && !localStorage.getItem(EDIT_HINT)) {
     extra = tt('game.editHint');
   } else if (sum.completed) {
@@ -853,6 +854,12 @@ function infoHtml(game, sum) {
       : tt('game.leads', { names: names(sum.leaders), score: fmt(sum.totals[leader]) });
   }
   return `<div class="info-line">${parts.join(' · ')}</div>${extra ? `<div class="info-line sub">${extra}</div>` : ''}`;
+}
+
+// "Ola melder 8 · makker: Per", or the 🌟 version.
+function contractLine(game, c, index) {
+  if (isAllAlone(game, c, index)) return tt('am.starLine', { k: pname(c.kurtier) });
+  return tt('am.contractLine', { k: pname(c.kurtier), bid: c.bid, p: c.partner ? pname(c.partner) : t('am.alone') });
 }
 
 // Bids so far: "3 av 5 har meldt" until everyone has, then the balance.
@@ -1134,20 +1141,24 @@ function sheetSections(game) {
     const c = f.contract;
     out.push(`<h3>${tt('am.kurtier')}</h3><div class="pchips" role="group" aria-label="${tt('am.kurtier')}">${order.map((pid) =>
       `<button type="button" class="pchip${c.kurtier === pid ? ' on' : ''}" data-g="kurtier" data-pid="${pid}" ${pressed(c.kurtier === pid)}>${esc(pname(pid))}</button>`).join('')}</div>`);
-    out.push(`<h3>${tt('am.bid')}</h3>${chipRow('bid', '', minBid(game, f.index), total, c.bid, t('am.bid'))}<p class="muted small chip-note">${tt('am.allHint', { n: total })}</p>`);
-    if (c.kurtier && c.bid === total) {
-      out.push(`<h3>${tt('am.partner')}</h3><p class="contract-line">${tt('am.allAlone')}</p>`);
+    const star = isAllAlone(game, c, f.index);
+    out.push(`<h3>${tt('am.bid')}</h3>${chipRow('bid', '', minBid(game, f.index), total, star ? null : c.bid, t('am.bid'))}`);
+    if (rulesOf(game).allAlone) {
+      out.push(`<div class="pchips star-row"><button type="button" class="pchip star-chip${star ? ' on' : ''}" data-g="star" ${pressed(star)}>🌟 ${tt('am.star', { n: total })}</button></div>`);
+    }
+    if (c.kurtier && star) {
+      out.push(`<p class="contract-line">${tt('am.allAlone')}</p>`);
     } else if (c.kurtier) {
       out.push(`<h3>${tt('am.partner')}</h3><div class="pchips" role="group" aria-label="${tt('am.partner')}">${order.filter((pid) => pid !== c.kurtier).map((pid) =>
         `<button type="button" class="pchip${c.partner === pid ? ' on' : ''}" data-g="partner" data-pid="${pid}" ${pressed(c.partner === pid)}>${esc(pname(pid))}</button>`).join('')}
-        <button type="button" class="pchip${c.partner === null ? ' on' : ''}" data-g="partner" data-pid="" ${pressed(c.partner === null)}>${tt('am.alone')}</button></div>`);
+        ${c.bid === total && !rulesOf(game).allAlone ? '' : `<button type="button" class="pchip${c.partner === null ? ' on' : ''}" data-g="partner" data-pid="" ${pressed(c.partner === null)}>${tt('am.alone')}</button>`}</div>`);
     }
   }
 
   if (f.mode.endsWith('atricks') && show('second')) {
     const c = f.contract;
     const total = tricksTotal(game, f.index);
-    if (c.kurtier && Number.isInteger(c.bid)) out.push(`<p class="contract-line">${tt('am.contractLine', { k: pname(c.kurtier), bid: c.bid, p: c.partner ? pname(c.partner) : t('am.alone') })}</p>`);
+    if (c.kurtier && Number.isInteger(c.bid)) out.push(`<p class="contract-line">${contractLine(game, c, f.index)}</p>`);
     if (c.kurtier && c.partner !== undefined) {
       out.push(`<h3>${tt('am.othersTricks')}</h3><div class="entry-list">${order.filter((pid) => pid !== c.kurtier && pid !== c.partner).map((pid) => `
         <div class="entry col" data-row="${pid}">${nameCell(pid)}${chipRow('tricks', pid, 0, total, f.tricks[pid], `${pname(pid)}: ${t('sheet.tricks')}`)}</div>`).join('')}</div>`);
@@ -1466,9 +1477,14 @@ sheet.addEventListener('click', async (e) => {
       form[g][pid] = v;
       form.touched[pid] = true;
     } else if (g === 'bid') {
+      const game = state().games[form.gid];
+      // Leaving the 🌟 (or picking the top number): choose a partner again.
+      if (isAllAlone(game, form.contract, form.index) || (v === tricksTotal(game, form.index) && !rulesOf(game).allAlone && form.contract.partner === null)) form.contract.partner = undefined;
       form.contract.bid = v;
-      // The top bid is every trick, which you take alone.
-      if (v === tricksTotal(state().games[form.gid], form.index)) form.contract.partner = null;
+      return renderSheet();
+    } else if (g === 'star') {
+      form.contract.bid = tricksTotal(state().games[form.gid], form.index);
+      form.contract.partner = null;
       return renderSheet();
     }
     else if (g === 'kurtier') {
@@ -1826,7 +1842,7 @@ function renderDash() {
   const r = sum.pending;
   const sub = (pid) => {
     if (r?.bids && pid in r.bids) return `<span class="pill">${tt('table.bid')} ${r.bids[pid]}</span>`;
-    if (r?.contract?.kurtier === pid) return `<span class="pill">${tt('am.kurtier')} · ${r.contract.bid}</span>`;
+    if (r?.contract?.kurtier === pid) return `<span class="pill">${isAllAlone(game, r.contract, sum.current) ? '🌟' : `${tt('am.kurtier')} · ${r.contract.bid}`}</span>`;
     if (r?.contract?.partner === pid) return `<span class="pill">${tt('am.partner')}</span>`;
     return '';
   };
