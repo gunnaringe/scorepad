@@ -214,6 +214,11 @@ function sessionSummary(rec) {
 const reduceRec = (rec) => reduce([...rec.events, ...rec.pending]);
 
 function renderHome() {
+  // "New game" makes a record up front; drop the ones abandoned before a game
+  // was started (never shared, nothing in them).
+  for (const rec of store.listSessions()) {
+    if (!rec.code && !rec.events.length && !rec.pending.length) store.deleteSession(rec.id);
+  }
   const sessions = store.listSessions();
   const [latest, ...older] = sessions;
   const item = (rec, cls = '') => {
@@ -1247,6 +1252,7 @@ async function boot() {
 
 boot();
 
-if ('serviceWorker' in navigator && location.protocol === 'https:') {
+// Secure context covers https and localhost (so local testing exercises it).
+if ('serviceWorker' in navigator && window.isSecureContext) {
   navigator.serviceWorker.register('/sw.js').catch(() => {});
 }
