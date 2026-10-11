@@ -20,8 +20,8 @@ Score keeping for card games, built for phones at the cabin table:
   days without activity; each device keeps its own copy.
 - **Dashboard:** any device (a laptop or TV) can show a big live scoreboard.
   It's just a view, not a role.
-- **Themes:** Hytte (cabin, default), Kos (a heart waffle on a snowy
-  night), Lys, Mørk, Høy kontrast. **Languages:**
+- **Themes:** Hytte (cabin, default), Kos (a mug of hot chocolate on a
+  snowy night), Lys, Mørk, Høy kontrast. **Languages:**
   Norwegian and English.
 - Works offline as an installable app. No accounts, no tracking.
 

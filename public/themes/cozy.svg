@@ -1,8 +1,12 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 140">
-  <!-- Kos theme art: a heart waffle with jam, in falling snow. -->
-  <defs>
-    <clipPath id="heart"><path d="M296 124C250 96 246 56 270 46c13-5 22 2 26 12 4-10 13-17 26-12 24 10 20 50-26 78Z"/></clipPath>
-  </defs>
+  <!-- Kos theme art: a steaming mug of hot chocolate in falling snow. -->
+  <style>
+    .steam { fill: none; stroke: #fff4e6; stroke-width: 4; stroke-linecap: round; opacity: .75; animation: rise 3.2s ease-in-out infinite; }
+    .s2 { animation-delay: -1.1s; }
+    .s3 { animation-delay: -2.2s; }
+    @keyframes rise { 0% { transform: translateY(6px); opacity: 0; } 40% { opacity: .8; } 100% { transform: translateY(-10px); opacity: 0; } }
+    @media (prefers-reduced-motion: reduce) { .steam { animation: none; } }
+  </style>
 
   <!-- snow -->
   <g fill="#fff4e6" opacity=".7">
@@ -11,15 +15,20 @@
     <circle cx="352" cy="96" r="1.8"/><circle cx="8" cy="104" r="1.4"/>
   </g>
 
-  <!-- heart waffle, centred -->
-  <g transform="translate(180 74) scale(1.3) translate(-296 -83)">
-  <path d="M296 124C250 96 246 56 270 46c13-5 22 2 26 12 4-10 13-17 26-12 24 10 20 50-26 78Z" fill="#e9b44c"/>
-  <g clip-path="url(#heart)" stroke="#b9802a" stroke-width="2.5" opacity=".75">
-    <path d="M248 52h100M248 62h100M248 72h100M248 82h100M248 92h100M248 102h100M248 112h100M248 122h100"/>
-    <path d="M256 40v90M266 40v90M276 40v90M286 40v90M296 40v90M306 40v90M316 40v90M326 40v90M336 40v90"/>
+  <!-- hot chocolate, centred -->
+  <g transform="translate(180 72) scale(1.2) translate(-194 -71)">
+  <path class="steam" d="M168 40c-6-8 6-12 0-20"/>
+  <path class="steam s2" d="M182 38c-6-8 6-12 0-20"/>
+  <path class="steam s3" d="M196 40c-6-8 6-12 0-20"/>
+  <path d="M216 72h8a14 14 0 0 1 0 28h-8" fill="none" stroke="#b3263a" stroke-width="7"/>
+  <path d="M150 56h68v48a20 20 0 0 1-20 20h-28a20 20 0 0 1-20-20Z" fill="#b3263a"/>
+  <!-- a band of little Selbu roses on the mug -->
+  <rect x="150" y="80" width="68" height="14" fill="#fff4e6"/>
+  <g fill="#b3263a">
+    <path d="M160 82l3 5-3 5-3-5Z"/><path d="M176 82l3 5-3 5-3-5Z"/><path d="M192 82l3 5-3 5-3-5Z"/><path d="M208 82l3 5-3 5-3-5Z"/>
   </g>
-  <path d="M296 124C250 96 246 56 270 46c13-5 22 2 26 12 4-10 13-17 26-12 24 10 20 50-26 78Z" fill="none" stroke="#b9802a" stroke-width="3"/>
-  <!-- a dollop of jam -->
-  <path d="M300 70c6-4 14 0 12 6s-12 6-14 2 0-6 2-8Z" fill="#b3263a"/>
+  <ellipse cx="184" cy="56" rx="34" ry="7" fill="#5a3324"/>
+  <g fill="#fffaf3"><circle cx="174" cy="53" r="6"/><circle cx="186" cy="51" r="7"/><circle cx="197" cy="54" r="5"/></g>
+
   </g>
 </svg>
