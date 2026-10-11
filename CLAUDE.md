@@ -100,6 +100,11 @@ don't reuse its names, D1 database or rate-limit namespace (`1001`).
 - **Short names:** `shortNames()` abbreviates long player names in table
   headers to unique initials (limit shrinks with player count); tapping the
   header shows the full name in a toast.
+- **Paper texture:** Hytte and Kos lay `public/themes/paper.svg` (fine grain
+  and faint fibres, mostly transparent) over their cream surfaces via
+  `--paper-tex` and `background-image`, at the end of `styles.css`. A new
+  cream surface in those themes should get the texture too; the other themes
+  stay flat.
 - **Sharing:** the bar's `.chip-slot` is a share button (unshared) or the
   code chip (shared); both open the share dialog (`renderShare()`: share, or
   QR, code and link — nothing else). Connections (status, devices, leave) are

@@ -1035,3 +1035,27 @@ body[data-view="dash"] { overflow: hidden; }
 }
 [data-theme="hytte"] .dash .exit { color: var(--ink); opacity: .55; }
 [data-theme="hytte"] .dash-head > .grow { flex: 0 1 auto; }
+
+/* --- Paper texture on the cream surfaces (Hytte and Kos) ------------------------------ */
+
+:is([data-theme="hytte"], [data-theme="cozy"]) { --paper-tex: url(/themes/paper.svg); }
+:is([data-theme="hytte"], [data-theme="cozy"]) :is(dialog, .seats li, table.score, .results, .suggest, .text-input, .code-input, .combo input, .num, .rest li) {
+  background-image: var(--paper-tex);
+}
+:is([data-theme="hytte"], [data-theme="cozy"]) .score tbody tr:nth-child(even) td { background-image: var(--paper-tex); }
+[data-theme="cozy"] .card { background-image: var(--paper-tex); }
+[data-theme="hytte"] .card { background-image: var(--paper-tex), linear-gradient(180deg, #fffbf2, #fbf1de); }
+[data-theme="hytte"] .board li, [data-theme="cozy"] .board li {
+  background-image: var(--paper-tex), linear-gradient(90deg, color-mix(in srgb, var(--gold) 22%, transparent) calc(var(--w, 0) * 100%), transparent 0);
+}
+/* The cream labels on the wall (Hytte). */
+[data-theme="hytte"] :is(.page > .stack > section:not(.card) > h2, .page .hint, .empty, .page .link, .dash-head > .grow, .board-legend) {
+  background-image: var(--paper-tex);
+}
+[data-theme="hytte"] .card :is(.hint, .link, h2) { background-image: none; }
+/* The empty part of the table and the header/totals get the same paper. */
+:is([data-theme="hytte"], [data-theme="cozy"]) .score tbody tr.filler td { background-image: var(--paper-tex) !important; }
+[data-theme="hytte"] :is(.score thead th, .score tfoot th, .score tfoot td, .score .rn) {
+  background-image: var(--paper-tex), linear-gradient(180deg, #f9ebc9, #f3dfb4);
+}
+[data-theme="hytte"] .score tfoot td.lead { background-image: var(--paper-tex), linear-gradient(180deg, #fff0c4, #fddf9a); }
