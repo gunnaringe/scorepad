@@ -21,16 +21,16 @@
 :root,
 [data-theme="hytte"] {
   color-scheme: light;
-  /* Hytte: a log cabin on a winter evening. A timber wall in lamp light with
-     a fireplace glow, linen-cream paper, rust red and honey gold. */
-  --bg: #5b3a27;
+  /* Hytte: the inside of a cabin on a winter evening. Knotty-pine panelling
+     in lamp light, darker stained boards up top, linen-cream paper, rust red
+     and honey gold. */
+  --bg: #8a5630;
   --bg-image:
-    radial-gradient(130% 55% at 50% 108%, rgb(255 150 60 / .34), rgb(255 120 40 / .1) 45%, transparent 70%),
-    linear-gradient(90deg, rgb(10 3 0 / .5), transparent 22%, transparent 78%, rgb(10 3 0 / .5)),
-    repeating-linear-gradient(180deg,
-      rgb(255 214 160 / .09) 0, rgb(255 214 160 / .05) 4px, transparent 14px,
-      transparent 46px, rgb(0 0 0 / .16) 56px, rgb(0 0 0 / .42) 62px, rgb(0 0 0 / .62) 64px),
-    linear-gradient(180deg, #6a4430, #4d2f20);
+    radial-gradient(90% 50% at 50% 0%, rgb(255 205 130 / .2), transparent 70%),
+    radial-gradient(130% 50% at 50% 110%, rgb(255 150 60 / .2), transparent 70%),
+    linear-gradient(90deg, rgb(15 5 0 / .5), transparent 24%, transparent 76%, rgb(15 5 0 / .5)),
+    linear-gradient(rgb(28 11 2 / .33), rgb(28 11 2 / .33)),
+    url(/themes/panel.svg);
   --bar: #3a2218;
   --bar-ink: #fff3dc;
   --paper: #fffaf0;
@@ -974,3 +974,24 @@ body[data-view="dash"] { overflow: hidden; }
   -webkit-mask-image: linear-gradient(90deg, transparent, #000 10%, #000 90%, transparent);
   mask-image: linear-gradient(90deg, transparent, #000 10%, #000 90%, transparent);
 }
+
+/* Hytte: the bars are dark-stained boards, like the cabin ceiling. */
+[data-theme="hytte"] .bar {
+  background: linear-gradient(rgb(34 15 5 / .74), rgb(34 15 5 / .74)), url(/themes/panel.svg) 0 0 / 480px 960px;
+}
+[data-theme="hytte"] .hero {
+  background: radial-gradient(90% 140% at 50% 0, rgb(255 190 110 / .22), transparent 70%), linear-gradient(rgb(34 15 5 / .74), rgb(34 15 5 / .74)), url(/themes/panel.svg) 0 0 / 480px 960px;
+}
+[data-theme="hytte"] .game-info {
+  background: url(/themes/knit.svg) repeat-x 0 100% / auto 12px, linear-gradient(rgb(34 15 5 / .74), rgb(34 15 5 / .74)), url(/themes/panel.svg) 0 0 / 480px 960px;
+}
+.sw-hytte {
+  background: radial-gradient(circle at 70% 28%, #ffd36b 0 2.5px, transparent 3px),
+    linear-gradient(135deg, transparent 0 42%, #fffaf0 42% 68%, #b23a2c 68%),
+    repeating-linear-gradient(90deg, #b9783f 0 5px, #4a2711 5px 6px);
+}
+/* Text that sits straight on the wall gets a soft shadow so it stays readable. */
+[data-theme="hytte"] .page > .stack > section > h2, [data-theme="hytte"] .page .hint, [data-theme="hytte"] .page > .stack > .stack > .link, [data-theme="hytte"] .empty {
+  text-shadow: 0 1px 3px rgb(20 7 0 / .6);
+}
+[data-theme="hytte"] .card, [data-theme="hytte"] .card * { text-shadow: none; }

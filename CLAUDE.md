@@ -123,7 +123,9 @@ don't reuse its names, D1 database or rate-limit namespace (`1001`).
   plain text, `tt()` HTML-escaped. Player names are user text, so always go
   through `esc()`/`tt()`.
 - **Themes:** custom properties per `html[data-theme]` in `styles.css`. Only
-  the theme blocks set colors. Hytte is a log cabin at dusk (timber-wall background with a fireplace glow,
+  the theme blocks set colors. Hytte is the inside of a cabin in the evening (knotty-pine panelling,
+  `public/themes/panel.svg`, dimmed by lamp-light gradients; the bars are the
+  same boards stained darker;
   the Selbu wool band `public/themes/knit.svg` under bars, the cabin scene
   `public/themes/hytte.svg` on the home screen and big screen);
   Kos (`cozy`) a waffle-grid texture, snow and `public/themes/cozy.svg`
