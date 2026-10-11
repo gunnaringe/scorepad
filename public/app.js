@@ -793,7 +793,8 @@ function cellHtml(game, row, pid) {
     if (r.contract.kurtier === pid) sub = `<span class="role">${isAllAlone(game, r.contract, row.index) ? '🌟' : `${tt('am.kurtier')} ${r.contract.bid}`}</span>`;
     else if (r.contract.partner === pid) sub = `<span class="role">${tt('am.partner')}</span>`;
   } else if (r.bids && pid in r.bids) {
-    sub = r.tricks ? `${r.bids[pid]}/${r.tricks[pid] ?? 0}${r.bids[pid] === r.tricks[pid] ? ' ✓' : ''}` : `${tt('table.bid')} ${r.bids[pid]}`;
+    // Spell out the bid: "bid 2 ✓" when made, "bid 2 → 3" (tricks taken) when not.
+    sub = `${tt('table.bid')} ${r.bids[pid]}${!r.tricks ? '' : r.bids[pid] === r.tricks[pid] ? ' ✓' : ` → ${r.tricks[pid] ?? 0}`}`;
   }
   if (!row.scores) return `<td class="pending"><span class="sub">${sub || '·'}</span></td>`;
   const v = row.scores[pid] ?? 0;
