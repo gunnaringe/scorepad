@@ -339,3 +339,31 @@ export function bidBalance(game, bids, i) {
   for (const pid of game.players) sum += bids?.[pid] ?? 0;
   return sum - cards;
 }
+
+// Short, unique labels for long player names, for narrow table columns:
+// "Kari Nordmann" → "KN", a second "Kari Nilsen" → "KNi", "Alexander" → "Al".
+// Names that fit are kept. The limit shrinks as more players share the width.
+export function shortNames(names) {
+  const chars = (str) => Array.from(str);
+  const limit = Math.max(5, Math.min(10, Math.floor(40 / Math.max(1, names.length))));
+  const taken = new Set(names.filter((n) => chars(n).length <= limit).map((n) => n.toLocaleLowerCase()));
+  return names.map((n) => {
+    if (chars(n).length <= limit) return n;
+    const words = n.trim().split(/\s+/).filter(Boolean);
+    const first = (w) => chars(w)[0].toLocaleUpperCase();
+    const build = (k) => {
+      if (words.length > 1) {
+        const last = chars(words.at(-1));
+        return words.slice(0, -1).map(first).join('') + first(words.at(-1)) + last.slice(1, k).join('');
+      }
+      return chars(n).slice(0, k + 1).join('');
+    };
+    let k = 1;
+    let cand = build(k);
+    const maxK = Math.max(...words.map((w) => chars(w).length)) + 1;
+    while (taken.has(cand.toLocaleLowerCase()) && k < maxK) cand = build(++k);
+    for (let i = 2; taken.has(cand.toLocaleLowerCase()); i++) cand = `${build(1)}${i}`;
+    taken.add(cand.toLocaleLowerCase());
+    return cand;
+  });
+}

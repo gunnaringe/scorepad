@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { reduce } from '../public/core.js';
-import { sequence, capCards, cardOptions, fitCardsToEntry, deckFit, scoreRound, computeRound, isAllAlone, minBid, summarize, cardsFor, bidBalance, tricksTotal, presetRules, matchPreset, playerProblem, sanitizeRules } from '../public/rules.js';
+import { shortNames, sequence, capCards, cardOptions, fitCardsToEntry, deckFit, scoreRound, computeRound, isAllAlone, minBid, summarize, cardsFor, bidBalance, tricksTotal, presetRules, matchPreset, playerProblem, sanitizeRules } from '../public/rules.js';
 
 const players = (...names) => names.map((n) => ({ id: `ev-${n}`, type: 'addPlayer', pid: n, name: n.toUpperCase() }));
 const game = (preset, pids, rules = {}, extra = {}) => ({ id: 'ev-g', type: 'newGame', gid: 'g', name: preset, rules: { ...presetRules(preset), ...rules }, players: pids, at: 1, ...extra });
@@ -239,4 +239,16 @@ test('card options depend on the round type', () => {
   assert.equal(fitCardsToEntry({ ...presetRules('selbuvist'), entry: 'scores' }).cards, 'none');
   assert.equal(fitCardsToEntry({ ...presetRules('free'), entry: 'contract' }).cards, 'deck');
   assert.equal(fitCardsToEntry({ ...presetRules('amerikaner'), entry: 'bids' }).cards, 'deck');
+});
+
+test('short names: initials, unique, only for long names', () => {
+  assert.deepEqual(shortNames(['Kari Nordmann', 'Ola', 'Per', 'Lise']), ['KN', 'Ola', 'Per', 'Lise']);
+  assert.deepEqual(shortNames(['Kari Nordmann', 'Kari Nilsen', 'Kari Norheim', 'Ola']), ['KN', 'KNi', 'KNo', 'Ola']);
+  assert.deepEqual(shortNames(['Alexander', 'Alexandra', 'Bo', 'Cy', 'Di', 'Ed']), ['Al', 'Ale', 'Bo', 'Cy', 'Di', 'Ed']);
+  // a short name that equals the initials of a long one is not reused
+  assert.deepEqual(shortNames(['Kari Nordmann', 'KN', 'Ola', 'Per']), ['KNo', 'KN', 'Ola', 'Per']);
+  // the limit shrinks with more players
+  assert.equal(shortNames(['Ola Nordmann', 'A', 'B', 'C']).at(0), 'ON'); // 12 > 10
+  assert.equal(shortNames(['Magnus', 'A', 'B', 'C', 'D', 'E', 'F', 'G']).at(0), 'Ma'); // 8 players: limit 5
+  assert.equal(shortNames(['Magnus', 'A']).at(0), 'Magnus');
 });

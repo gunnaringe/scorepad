@@ -55,7 +55,7 @@ const addPlayers = async (p, names) => { for (const n of names) { await p.fill('
   await p.click('#primary');
   await p.click('#sheet [data-g="kurtier"][data-pid]:nth-child(2)');
   await p.click('#sheet [data-g="bid"][data-v="8"]');
-  await p.click('#sheet [data-g="partner"]:nth-child(2)');
+  await p.click('#sheet [data-g="partner"]:not([data-pid=""]):not([disabled])');
   await p.screenshot({ path: '/tmp/shots/am-contract.png' });
   await p.click('#sheet-save');
   await p.click('#primary');

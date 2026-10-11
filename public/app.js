@@ -12,7 +12,7 @@
 
 import {
   DEFAULT_RULES, PRESET_IDS, presetRules, rulesOf, matchPreset, sanitizeRules, playerProblem,
-  sequence, capCards, cardOptions, fitCardsToEntry,
+  sequence, capCards, cardOptions, fitCardsToEntry, shortNames,
   summarize, cardsFor, tricksTotal, teamTricks, minBid, scoreRound, computeRound, bidBalance, dealerFor, isAllAlone,
 } from './rules.js';
 import { newId, reduce } from './core.js';
@@ -460,26 +460,36 @@ const SOURCES = {
   amerikaner: '<a href="https://no.wikipedia.org/wiki/Amerikaner_(kortspill)" target="_blank" rel="noopener">Wikipedia: Amerikaner</a>',
 };
 
+// Rule editor fields. Numbers are compact (label above), switches and
+// pick lists take a full row. Hints are collected under the group.
+const HALF_WIDE = new Set(['doubleKurtier', 'halfPartner']);
+
 function ruleField(key) {
   const r = draft.rules;
   const def = DEFAULT_RULES[key];
   const label = tt(`rule.${key}`);
-  const hint = I18N.no[`rule.${key}.hint`] ? `<small class="muted">${tt(`rule.${key}.hint`)}</small>` : '';
   if (typeof def === 'boolean') {
-    return `<label class="switch-row"><span>${label}${hint}</span><input type="checkbox" class="switch" data-rule="${key}"${r[key] ? ' checked' : ''}></label>`;
+    return `<label class="switch-row${HALF_WIDE.has(key) ? ' half' : ''}"><span>${label}</span><input type="checkbox" class="switch" data-rule="${key}"${r[key] ? ' checked' : ''}></label>`;
   }
   if (key === 'minBid') {
-    // A pick list: nothing, or 1–13 tricks (capped by the deal in play).
-    const opts = Array.from({ length: 14 }, (_, n) => `<option value="${n}"${r.minBid === n ? ' selected' : ''}>${n ? n : tt('rule.minBid.none')}</option>`).join('');
-    return `<label class="field-row"><span>${label}${hint}</span><select class="num select" data-rule="minBid">${opts}</select></label>`;
+    // Our own stepper: the browser's drop-down list doesn't fit the look.
+    const v = r.minBid;
+    return `<div class="num-field" role="group" aria-label="${label}"><span>${label}</span>
+      <div class="mini-stepper">
+        <button type="button" data-stepper="minBid" data-d="-1" aria-label="−1"${v <= 0 ? ' disabled' : ''}>−</button>
+        <output>${v ? v : tt('rule.minBid.none')}</output>
+        <button type="button" data-stepper="minBid" data-d="1" aria-label="+1"${v >= 17 ? ' disabled' : ''}>+</button>
+      </div></div>`;
   }
   if (typeof def === 'number') {
-    return `<label class="field-row"><span>${label}${hint}</span><input type="number" inputmode="numeric" class="num" data-rule="${key}" value="${r[key]}"></label>`;
+    return `<label class="num-field"><span>${label}</span><input type="number" inputmode="numeric" class="num" data-rule="${key}" value="${r[key]}"></label>`;
   }
   const opts = { entry: ['scores', 'bids', 'contract'], cards: cardOptions(r.entry), fail: ['minus', 'zero'] }[key];
   return `<div class="field-col" role="group" aria-label="${label}"><span>${label}</span><div class="segmented">${opts.map((o) =>
     `<button type="button" data-rule="${key}" data-val="${o}" class="${r[key] === o ? 'on' : ''}" ${pressed(r[key] === o)}>${tt(`rule.${key}.${o}`)}</button>`).join('')}</div></div>`;
 }
+
+const ruleHint = (key) => (I18N.no[`rule.${key}.hint`] ? `<p class="rule-hint"><b>${tt(`rule.${key}`)}:</b> ${tt(`rule.${key}.hint`)}</p>` : '');
 
 function ruleFields() {
   const r = draft.rules;
@@ -488,9 +498,9 @@ function ruleFields() {
     groups.push(['cards', ...({ fixed: ['cardsFixed'], varies: ['cardsFrom', 'cardsTurn', 'cardsTo'] }[r.cards] ?? [])]);
   }
   if (r.entry === 'bids') groups.push(['hitBase', 'hitPerTrick', 'missPerTrick', 'trickPoints']);
-  if (r.entry === 'contract') groups.push(['fail', 'othersPerTrick', 'doubleKurtier', 'halfPartner', 'minBid', 'allAlone', ...(r.allAlone ? ['allAlonePoints'] : [])]);
+  if (r.entry === 'contract') groups.push(['fail'], ['othersPerTrick', 'minBid'], ['doubleKurtier', 'halfPartner'], ['allAlone', ...(r.allAlone ? ['allAlonePoints'] : [])]);
   groups.push(['target', 'lowWins']);
-  return groups.map((keys) => `<div class="rule-group">${keys.map(ruleField).join('')}</div>`).join('');
+  return groups.map((keys) => `<div class="rule-group">${keys.map(ruleField).join('')}${keys.map(ruleHint).join('')}</div>`).join('');
 }
 
 function renderNew() {
@@ -643,6 +653,10 @@ function wireNew() {
     } else if (b.dataset.rule && b.dataset.val) {
       draft.rules = fitCardsToEntry({ ...draft.rules, ...sanitizeRules({ [b.dataset.rule]: b.dataset.val }) });
       rerenderNew();
+    } else if (b.dataset.stepper) {
+      const k = b.dataset.stepper;
+      draft.rules = { ...draft.rules, ...sanitizeRules({ [k]: draft.rules[k] + Number(b.dataset.d) }) };
+      rerenderNew();
     } else if (b.dataset.fit) {
       draft.rules = capCards(draft.rules, +b.dataset.fit);
       rerenderNew();
@@ -791,8 +805,13 @@ function cellHtml(game, row, pid) {
 
 function tableHtml(game, sum, { interactive = true } = {}) {
   const lead = new Set(sum.completed ? sum.leaders : []);
-  const head = game.players.map((pid) => `<th scope="col" class="${lead.has(pid) ? 'lead' : ''}${sum.dealer === pid && !sum.done ? ' dealer' : ''}">
-    <span class="pn">${esc(pname(pid))}</span>${sum.dealer === pid && !sum.done ? `<span class="deal-mark" title="${tt('game.dealer')}">${icon('cards')}</span>` : ''}</th>`).join('');
+  const labels = shortNames(game.players.map(pname));
+  const head = game.players.map((pid, i) => {
+    const short = labels[i] !== pname(pid);
+    // An abbreviated name shows in full when tapped.
+    return `<th scope="col" class="${lead.has(pid) ? 'lead' : ''}${sum.dealer === pid && !sum.done ? ' dealer' : ''}${short ? ' abbr' : ''}"${short ? ` data-full="${esc(pname(pid))}" title="${esc(pname(pid))}" aria-label="${esc(pname(pid))}" tabindex="0" role="button"` : ''}>
+    <span class="pn">${esc(labels[i])}</span>${sum.dealer === pid && !sum.done ? `<span class="deal-mark" title="${tt('game.dealer')}">${icon('cards')}</span>` : ''}</th>`;
+  }).join('');
   const rows = sum.rows.map((row) => {
     const title = row.cards != null ? `${t('game.round', { n: row.index + 1 })} · ${t('game.cards', { n: row.cards })}` : t('game.round', { n: row.index + 1 });
     return `<tr${interactive ? ` data-rid="${esc(row.round.id)}" tabindex="0" aria-label="${tt('table.editRow', { n: row.index + 1 })}"` : ''} class="${row.scores ? '' : 'pending-row'}">
@@ -907,10 +926,17 @@ function renderGame() {
   $('#game-menu').onclick = openGameMenu;
   const gt = $('#gt');
   gt.onclick = (e) => {
+    const th = e.target.closest('th[data-full]');
+    if (th) return toast(th.dataset.full);
     const tr = e.target.closest('tr[data-rid]');
     if (tr) openRound('edit', tr.dataset.rid);
   };
   gt.onkeydown = (e) => {
+    const th = e.target.closest('th[data-full]');
+    if (th && (e.key === 'Enter' || e.key === ' ')) {
+      e.preventDefault();
+      return toast(th.dataset.full);
+    }
     const tr = e.target.closest('tr[data-rid]');
     if (tr && (e.key === 'Enter' || e.key === ' ')) {
       e.preventDefault();
@@ -1088,7 +1114,7 @@ function bidOrder(game, index) {
 // three) balanced rows rather than a lonely last button.
 function chipRow(group, pid, from, to, value, label) {
   const count = to - from + 1;
-  const cols = count <= 7 ? count : count <= 14 ? Math.ceil(count / 2) : Math.ceil(count / 3);
+  const cols = count <= 11 ? count : Math.ceil(count / 2);
   let html = '';
   for (let v = from; v <= to; v++) {
     const on = value === v;
@@ -1139,6 +1165,7 @@ function sheetSections(game) {
   }
 
   if ((f.mode === 'tricks' || f.mode === 'bids+tricks') && show('second')) {
+    if (f.prefilled) out.push(`<p class="muted small hint-line">${tt('tricks.prefilled')}</p>`);
     out.push(`<div class="entry-list">${order.map((pid) => `
       <div class="entry${inline}" data-row="${pid}">${nameCell(pid, ` <span class="muted bidref">${tt('table.bid')} ${f.bids[pid] ?? '–'}</span><span class="preview" data-preview="${pid}"></span>`)}
       ${chipRow('tricks', pid, 0, maxN, f.tricks[pid], `${pname(pid)}: ${t('sheet.tricks')}`)}</div>`).join('')}</div>`);
@@ -1154,13 +1181,14 @@ function sheetSections(game) {
     if (rulesOf(game).allAlone) {
       out.push(`<div class="pchips star-row"><button type="button" class="pchip star-chip${star ? ' on' : ''}" data-g="star" ${pressed(star)}>🌟 ${tt('am.star', { n: total })}</button></div>`);
     }
-    if (c.kurtier && star) {
-      out.push(`<p class="contract-line">${tt('am.allAlone')}</p>`);
-    } else if (c.kurtier) {
-      out.push(`<h3>${tt('am.partner')}</h3><div class="pchips" role="group" aria-label="${tt('am.partner')}">${order.filter((pid) => pid !== c.kurtier).map((pid) =>
-        `<button type="button" class="pchip${c.partner === pid ? ' on' : ''}" data-g="partner" data-pid="${pid}" ${pressed(c.partner === pid)}>${esc(pname(pid))}</button>`).join('')}
-        ${c.bid === total && !rulesOf(game).allAlone ? '' : `<button type="button" class="pchip${c.partner === null ? ' on' : ''}" data-g="partner" data-pid="" ${pressed(c.partner === null)}>${tt('am.alone')}</button>`}</div>`);
-    }
+    // Always the same buttons (grey until a kurtier is picked; the kurtier's own
+    // spot stays as a gap), so the sheet never changes height.
+    const lock = !c.kurtier || star;
+    out.push(`<h3>${tt('am.partner')}${star ? ` <span class="muted">· ${tt('am.allAlone')}</span>` : ''}</h3>
+      <div class="pchips slot" role="group" aria-label="${tt('am.partner')}">${order.map((pid) => pid === c.kurtier
+        ? `<span class="pchip ghost" aria-hidden="true">${esc(pname(pid))}</span>`
+        : `<button type="button" class="pchip${c.partner === pid ? ' on' : ''}" data-g="partner" data-pid="${pid}" ${pressed(c.partner === pid)}${lock ? ' disabled' : ''}>${esc(pname(pid))}</button>`).join('')}
+        ${c.bid === total && !rulesOf(game).allAlone ? '' : `<button type="button" class="pchip${c.partner === null && !star ? ' on' : ''}" data-g="partner" data-pid="" ${pressed(c.partner === null && !star)}${lock ? ' disabled' : ''}>${tt('am.alone')}</button>`}</div>`);
   }
 
   if (f.mode.endsWith('atricks') && show('second')) {
@@ -1254,7 +1282,6 @@ function checkForm(game) {
         lines.push(`<span class="okline">${tt('tricks.ok', { n, cards })}</span>`);
       }
     }
-    if (f.prefilled && !Object.keys(f.touched).length) lines.unshift(tt('tricks.prefilled'));
   }
 
   if (f.mode.startsWith('contract')) {

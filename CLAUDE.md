@@ -89,6 +89,17 @@ don't reuse its names, D1 database or rate-limit namespace (`1001`).
   last round or the menu). Done games show `resultsHtml()` (podium for the
   top three, ties share a medal, then the rest) instead of the table, with a
   Tabell/Resultat toggle; the big screen shows the same podium.
+- **No layout jumps:** things that appear later get their space up front.
+  The info line has a fixed two-line height, the sheet summary reserves two
+  lines, and the Amerikaner partner buttons are always rendered (grey until a
+  kurtier is picked, the kurtier's own spot kept as a gap). The "next row"
+  marker is a box-shadow, never padding. Keep it that way when adding UI.
+- **Compact forms:** number rules are label-above fields in a 6-column grid
+  (`.rule-group`), switches and pick lists take a row; hints are collected
+  under the group. The min bid is our own `.mini-stepper`, not a `<select>`.
+- **Short names:** `shortNames()` abbreviates long player names in table
+  headers to unique initials (limit shrinks with player count); tapping the
+  header shows the full name in a toast.
 - **Sharing:** the bar's `.chip-slot` is a share button (unshared) or the
   code chip (shared); both open the share dialog (`renderShare()`: share, or
   QR, code and link — nothing else). Connections (status, devices, leave) are
