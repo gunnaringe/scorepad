@@ -13,10 +13,18 @@ export const DEFAULT_RULES = {
   //   contract - the highest bidder (kurtier) and a partner against the rest
   //              (Amerikaner)
   entry: 'scores',
-  // Cards dealt per round: none | updown (1→max→1) | downup (max→1→max) |
-  // fixed (max every round) | deck (52 ÷ players).
+  // Cards dealt per round:
+  //   none   - not fixed
+  //   fixed  - cardsFixed every round
+  //   varies - cardsFrom → cardsTurn → cardsTo, one card at a time. The
+  //            turning card is played twice (10→1→10 is 20 rounds), unless
+  //            cardsTo equals cardsTurn: then it's one way (10→1).
+  //   deck   - the whole deck, 52 ÷ players
   cards: 'none',
-  maxCards: 10,
+  cardsFixed: 10,
+  cardsFrom: 10,
+  cardsTurn: 1,
+  cardsTo: 10,
   // bids: exact hit = hitBase + hitPerTrick × bid, miss = −missPerTrick × off.
   // trickPoints are added per trick taken, hit or miss.
   hitBase: 10,
@@ -45,7 +53,7 @@ export const DEFAULT_RULES = {
 
 export const PRESETS = {
   free: {},
-  selbuvist: { entry: 'bids', cards: 'downup', maxCards: 10 },
+  selbuvist: { entry: 'bids', cards: 'varies', cardsFrom: 10, cardsTurn: 1, cardsTo: 10 },
   amerikaner: { entry: 'contract', cards: 'deck', target: 52 },
 };
 
@@ -53,10 +61,11 @@ export const PRESET_IDS = Object.keys(PRESETS);
 
 const CHOICES = {
   entry: ['scores', 'bids', 'contract'],
-  cards: ['none', 'updown', 'downup', 'fixed', 'deck'],
+  cards: ['none', 'fixed', 'varies', 'deck'],
   fail: ['minus', 'zero'],
 };
-const RANGES = { maxCards: [1, 52], minBid: [0, 52], allAlonePoints: [0, 1000], target: [0, 100000] };
+const CARDS = [1, 52];
+const RANGES = { cardsFixed: CARDS, cardsFrom: CARDS, cardsTurn: CARDS, cardsTo: CARDS, minBid: [0, 52], allAlonePoints: [0, 1000], target: [0, 100000] };
 
 export const presetRules = (id) => ({ ...DEFAULT_RULES, ...PRESETS[id] });
 
@@ -71,11 +80,24 @@ export function matchPreset(rules) {
   }) ?? null;
 }
 
+// Rules saved before cards became "none/fixed/varies/deck" used 'updown',
+// 'downup' and a shared maxCards. Convert on read; stored events stay as is.
+function upgradeRules(raw) {
+  const r = { ...raw };
+  const max = Number.isFinite(r.maxCards) ? r.maxCards : 10;
+  if (r.cards === 'updown') Object.assign(r, { cards: 'varies', cardsFrom: 1, cardsTurn: max, cardsTo: 1 });
+  else if (r.cards === 'downup') Object.assign(r, { cards: 'varies', cardsFrom: max, cardsTurn: 1, cardsTo: max });
+  else if (r.cards === 'fixed' && 'maxCards' in r && r.cardsFixed === undefined) r.cardsFixed = max;
+  delete r.maxCards;
+  return r;
+}
+
 // Keeps only known rules of the right type and range, so events from other
 // devices can't smuggle in junk.
-export function sanitizeRules(raw) {
+export function sanitizeRules(input) {
   const out = {};
-  if (!raw || typeof raw !== 'object') return out;
+  if (!input || typeof input !== 'object') return out;
+  const raw = upgradeRules(input);
   for (const [k, def] of Object.entries(DEFAULT_RULES)) {
     const v = raw[k];
     if (typeof v !== typeof def) continue;
@@ -92,12 +114,21 @@ export function sanitizeRules(raw) {
   return out;
 }
 
-function sequence(rules) {
-  const up = Array.from({ length: rules.maxCards }, (_, i) => i + 1);
-  const down = [...up].reverse();
-  if (rules.cards === 'updown') return [...up, ...down];
-  if (rules.cards === 'downup') return [...down, ...up];
-  return null;
+// a, a±1, … b (inclusive).
+function leg(a, b) {
+  const out = [];
+  const step = a <= b ? 1 : -1;
+  for (let x = a; ; x += step) {
+    out.push(x);
+    if (x === b) return out;
+  }
+}
+
+// The cards per round for "varies" rules, or null.
+export function sequence(rules) {
+  if (rules.cards !== 'varies') return null;
+  const first = leg(rules.cardsFrom, rules.cardsTurn);
+  return rules.cardsTo === rules.cardsTurn ? first : [...first, ...leg(rules.cardsTurn, rules.cardsTo)];
 }
 
 // Cards dealt to each player in round i (0-based), or null if not fixed.
@@ -105,11 +136,10 @@ export function cardsFor(game, i) {
   const r = rulesOf(game);
   const n = game.players.length;
   switch (r.cards) {
-    case 'updown':
-    case 'downup':
+    case 'varies':
       return sequence(r)[i] ?? null;
     case 'fixed':
-      return r.maxCards;
+      return r.cardsFixed;
     case 'deck':
       return n ? Math.floor(52 / n) : null;
     default:
@@ -130,7 +160,36 @@ export function totalRounds(game) {
 export function maxCardsPerRound(rules, players) {
   if (rules.cards === 'none') return rules.entry === 'contract' ? Math.floor(52 / Math.max(1, players)) : 0;
   if (rules.cards === 'deck') return Math.floor(52 / Math.max(1, players));
-  return rules.maxCards;
+  if (rules.cards === 'fixed') return rules.cardsFixed;
+  return Math.max(rules.cardsFrom, rules.cardsTurn, rules.cardsTo);
+}
+
+// Most cards per player the deck allows for this many players.
+export const deckFit = (players) => Math.floor(52 / Math.max(1, players));
+
+// The same rules with every card number limited to `max` (the fix for "not
+// enough cards").
+export function capCards(rules, max) {
+  const cap = (n) => Math.max(1, Math.min(n, max));
+  return {
+    ...rules,
+    cardsFixed: cap(rules.cardsFixed),
+    cardsFrom: cap(rules.cardsFrom),
+    cardsTurn: cap(rules.cardsTurn),
+    cardsTo: cap(rules.cardsTo),
+  };
+}
+
+// Which card options make sense for a round type.
+export const cardOptions = (entry) => ({ scores: [], bids: ['none', 'fixed', 'varies', 'deck'], contract: ['deck', 'fixed'] }[entry]);
+
+// After changing the round type: drop a card option that no longer applies.
+export function fitCardsToEntry(rules) {
+  const opts = cardOptions(rules.entry);
+  if (rules.cards !== 'none' && !opts.includes(rules.cards)) return { ...rules, cards: opts.includes('deck') ? 'deck' : 'none' };
+  if (rules.entry === 'scores') return { ...rules, cards: 'none' };
+  if (rules.entry === 'contract' && rules.cards === 'none') return { ...rules, cards: 'deck' };
+  return rules;
 }
 
 export const minPlayers = (rules) => (rules.entry === 'contract' ? 3 : rules.entry === 'bids' ? 2 : 1);
@@ -142,7 +201,7 @@ export function playerProblem(rules, players) {
   if (players < min) return { key: 'rules.tooFew', min };
   if (players > MAX_PLAYERS) return { key: 'rules.tooMany', max: MAX_PLAYERS };
   const cards = maxCardsPerRound(rules, players);
-  if (cards * players > 52) return { key: 'rules.deck', cards, max: Math.floor(52 / cards) };
+  if (cards * players > 52) return { key: 'rules.deck', cards, max: Math.floor(52 / cards), fit: deckFit(players) };
   if (rules.cards === 'deck' && cards < 1) return { key: 'rules.tooMany', max: 52 };
   return null;
 }

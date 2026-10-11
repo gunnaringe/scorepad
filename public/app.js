@@ -12,6 +12,7 @@
 
 import {
   DEFAULT_RULES, PRESET_IDS, presetRules, rulesOf, matchPreset, sanitizeRules, playerProblem,
+  sequence, capCards, cardOptions, fitCardsToEntry,
   summarize, cardsFor, tricksTotal, teamTricks, minBid, scoreRound, computeRound, bidBalance, dealerFor, isAllAlone,
 } from './rules.js';
 import { newId, reduce } from './core.js';
@@ -409,6 +410,11 @@ function initDraft() {
   }
 }
 
+// "10→1→10", or "10→1" when it only goes one way.
+function seqText(r) {
+  return r.cardsTo === r.cardsTurn ? `${r.cardsFrom}→${r.cardsTurn}` : `${r.cardsFrom}→${r.cardsTurn}→${r.cardsTo}`;
+}
+
 function hitText(r) {
   return [r.hitBase || '', r.hitPerTrick ? `${r.hitPerTrick === 1 ? '' : `${r.hitPerTrick} × `}${t('sum.bid')}` : ''].filter(Boolean).join(' + ') || '0';
 }
@@ -416,10 +422,7 @@ function hitText(r) {
 // The rules in plain words, one line per rule that matters.
 function rulesSummary(r) {
   const lines = [t(`sum.entry.${r.entry}`)];
-  if (r.entry !== 'scores') {
-    const rounds = r.cards === 'updown' || r.cards === 'downup' ? r.maxCards * 2 : 0;
-    lines.push(t(`sum.cards.${r.cards}`, { max: r.maxCards, n: rounds }));
-  }
+  if (r.entry !== 'scores') lines.push(t(`sum.cards.${r.cards}`, { seq: seqText(r), n: r.cards === 'varies' ? sequence(r).length : r.cardsFixed }));
   if (r.entry === 'bids') {
     lines.push(t('sum.hit', { hit: hitText(r) }));
     lines.push(r.missPerTrick ? t('sum.missPer', { n: r.missPerTrick }) : t('sum.miss0'));
@@ -440,7 +443,7 @@ function rulesSummary(r) {
 // The same, on one line: "Bud og stikk · 1→10→1 kort · treff 10 + bud · bom 0".
 function compactSummary(r) {
   const parts = [t(`rule.entry.${r.entry}`)];
-  if (r.entry !== 'scores' && r.cards !== 'none') parts.push(t(`cs.cards.${r.cards}`, { max: r.maxCards }));
+  if (r.entry !== 'scores' && r.cards !== 'none') parts.push(t(`cs.cards.${r.cards}`, { seq: seqText(r), n: r.cardsFixed }));
   if (r.entry === 'bids') {
     parts.push(t('cs.hit', { hit: hitText(r) }));
     parts.push(r.missPerTrick ? t('cs.missPer', { n: r.missPerTrick }) : t('cs.miss0'));
@@ -473,7 +476,7 @@ function ruleField(key) {
   if (typeof def === 'number') {
     return `<label class="field-row"><span>${label}${hint}</span><input type="number" inputmode="numeric" class="num" data-rule="${key}" value="${r[key]}"></label>`;
   }
-  const opts = { entry: ['scores', 'bids', 'contract'], cards: ['none', 'updown', 'downup', 'fixed', 'deck'], fail: ['minus', 'zero'] }[key];
+  const opts = { entry: ['scores', 'bids', 'contract'], cards: cardOptions(r.entry), fail: ['minus', 'zero'] }[key];
   return `<div class="field-col" role="group" aria-label="${label}"><span>${label}</span><div class="segmented">${opts.map((o) =>
     `<button type="button" data-rule="${key}" data-val="${o}" class="${r[key] === o ? 'on' : ''}" ${pressed(r[key] === o)}>${tt(`rule.${key}.${o}`)}</button>`).join('')}</div></div>`;
 }
@@ -482,7 +485,7 @@ function ruleFields() {
   const r = draft.rules;
   const groups = [['entry']];
   if (r.entry !== 'scores') {
-    groups.push(['cards', ...(['updown', 'downup', 'fixed'].includes(r.cards) ? ['maxCards'] : [])]);
+    groups.push(['cards', ...({ fixed: ['cardsFixed'], varies: ['cardsFrom', 'cardsTurn', 'cardsTo'] }[r.cards] ?? [])]);
   }
   if (r.entry === 'bids') groups.push(['hitBase', 'hitPerTrick', 'missPerTrick', 'trickPoints']);
   if (r.entry === 'contract') groups.push(['fail', 'othersPerTrick', 'doubleKurtier', 'halfPartner', 'minBid', 'allAlone', ...(r.allAlone ? ['allAlonePoints'] : [])]);
@@ -551,7 +554,7 @@ function renderNew() {
             <button class="btn" aria-label="${tt('new.add')}">${icon('plus')}</button>
           </form>
           ${chips.length ? `<div class="chips">${chips.map((c) => `<button type="button" class="chip" data-add="${esc(c)}">+ ${esc(c)}</button>`).join('')}</div>` : ''}
-          ${problem && n ? `<p class="hint warn">${tt(problem.key, problem)}</p>` : ''}
+          ${problem && n ? `<p class="hint warn">${tt(problem.key, problem)}${problem.fit ? ` <button type="button" class="link inline" data-fit="${problem.fit}">${tt('rules.deckFix', { n: problem.fit })}</button>` : ''}</p>` : ''}
         </section>
         ${editing ? `<p class="hint">${tt('new.editHint')}</p>` : nameSection}
       </div>
@@ -638,7 +641,10 @@ function wireNew() {
       draft.firstDealer = +b.dataset.dealer;
       rerenderNew();
     } else if (b.dataset.rule && b.dataset.val) {
-      draft.rules = { ...draft.rules, ...sanitizeRules({ [b.dataset.rule]: b.dataset.val }) };
+      draft.rules = fitCardsToEntry({ ...draft.rules, ...sanitizeRules({ [b.dataset.rule]: b.dataset.val }) });
+      rerenderNew();
+    } else if (b.dataset.fit) {
+      draft.rules = capCards(draft.rules, +b.dataset.fit);
       rerenderNew();
     }
   };

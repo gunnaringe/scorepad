@@ -867,3 +867,5 @@ body[data-view="dash"] { overflow: hidden; }
 .chip-note { margin-top: .3rem; }
 select.num.select { appearance: auto; min-width: 5.5rem; font-size: 1rem; text-align: left; min-height: 2.75rem; }
 .conn { gap: .3rem; }
+
+.hint.warn .link.inline { color: inherit; text-decoration: underline; font-weight: 700; padding: 0; min-height: 0; }

@@ -42,6 +42,14 @@ don't reuse its names, D1 database or rate-limit namespace (`1001`).
   `ruleFields()` and a line in `rulesSummary()`. `sanitizeRules()` enforces
   types, enums and ranges. Rules can change mid-game (`updateGame`, the same
   form at `#/s/:sid/g/:gid/edit`) and every round is rescored.
+- **Cards per round** (`cards`): `none` | `fixed` (`cardsFixed`) | `varies`
+  (`cardsFrom` → `cardsTurn` → `cardsTo`, one card at a time, the turning
+  card played twice; `cardsTo == cardsTurn` = one way) | `deck` (52 ÷
+  players). `cardOptions(entry)` says what a round type offers (Poeng: none;
+  Kurtier og makker: deck/fixed). Rules saved with the old `updown`/`downup`
+  + `maxCards` are converted when read (`upgradeRules`). When the deck is too
+  small `playerProblem` returns `fit` and the form offers "Sett maks til N"
+  (`capCards`).
 - **Rounds** are upserted by id via `putRound`. Bid games first store
   `{ bids }` (or `{ contract }` for Amerikaner) and the round shows as
   pending; then `{ bids, tricks }`. `isComplete()` decides which, and only the

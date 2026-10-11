@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { reduce } from '../public/core.js';
-import { scoreRound, computeRound, isAllAlone, minBid, summarize, cardsFor, bidBalance, tricksTotal, presetRules, matchPreset, playerProblem, sanitizeRules } from '../public/rules.js';
+import { sequence, capCards, cardOptions, fitCardsToEntry, deckFit, scoreRound, computeRound, isAllAlone, minBid, summarize, cardsFor, bidBalance, tricksTotal, presetRules, matchPreset, playerProblem, sanitizeRules } from '../public/rules.js';
 
 const players = (...names) => names.map((n) => ({ id: `ev-${n}`, type: 'addPlayer', pid: n, name: n.toUpperCase() }));
 const game = (preset, pids, rules = {}, extra = {}) => ({ id: 'ev-g', type: 'newGame', gid: 'g', name: preset, rules: { ...presetRules(preset), ...rules }, players: pids, at: 1, ...extra });
@@ -18,7 +18,7 @@ test('selbuvist: exact hit is 10 + bid, miss is 0', () => {
 });
 
 test('selbuvist: penalty variant and card sequence', () => {
-  const s = reduce([...players('a', 'b'), game('selbuvist', ['a', 'b'], { missPerTrick: 1, cards: 'downup' }),
+  const s = reduce([...players('a', 'b'), game('selbuvist', ['a', 'b'], { missPerTrick: 1 }),
     round({ id: 'r1', bids: { a: 3, b: 5 }, tricks: { a: 5, b: 5 } })]);
   const g = s.games.g;
   assert.deepEqual(scoreRound(g, g.rounds[0]), { a: -2, b: 15 });
@@ -102,27 +102,27 @@ test('ranking ties and low-wins', () => {
 
 test('reducer ignores junk without throwing', () => {
   const s = reduce([null, 42, { id: 'x', type: 'nope' }, { id: 'y', type: 'putRound', gid: 'missing' },
-    ...players('a'), { id: 'z', type: 'newGame', gid: 'g', players: ['a', 'ghost', 'a'], rules: { lowWins: 'yes', evil: 1, entry: 'nope', maxCards: 999 } },
+    ...players('a'), { id: 'z', type: 'newGame', gid: 'g', players: ['a', 'ghost', 'a'], rules: { lowWins: 'yes', evil: 1, entry: 'nope', cardsFrom: 999 } },
     { id: 'w', type: 'putRound', gid: 'g', round: { id: 'r', scores: { a: 'NaN', ghost: 4 } } }]);
   assert.deepEqual(s.games.g.players, ['a']);
-  assert.deepEqual(s.games.g.rules, { maxCards: 52 });
+  assert.deepEqual(s.games.g.rules, { cardsFrom: 52 });
   assert.deepEqual(s.games.g.rounds[0], { id: 'r', scores: {} });
 });
 
 test('presets are just rules; edits stop matching', () => {
   assert.equal(matchPreset(presetRules('selbuvist')), 'selbuvist');
-  assert.equal(matchPreset({ ...presetRules('selbuvist'), maxCards: 7 }), null);
+  assert.equal(matchPreset({ ...presetRules('selbuvist'), cardsFrom: 7 }), null);
   assert.equal(matchPreset({}), 'free');
 });
 
 test('mixed rules: bids with fixed cards and trick points; ending by hand', () => {
-  const s = reduce([...players('a', 'b', 'c'), game('free', ['a', 'b', 'c'], { entry: 'bids', cards: 'fixed', maxCards: 5, trickPoints: 1, hitBase: 5, hitPerTrick: 0 }),
+  const s = reduce([...players('a', 'b', 'c'), game('free', ['a', 'b', 'c'], { entry: 'bids', cards: 'fixed', cardsFixed: 5, trickPoints: 1, hitBase: 5, hitPerTrick: 0 }),
     round({ id: 'r1', bids: { a: 2, b: 1, c: 1 }, tricks: { a: 2, b: 3, c: 0 } })]);
   const g = s.games.g;
   assert.equal(cardsFor(g, 3), 5);
   assert.deepEqual(scoreRound(g, g.rounds[0]), { a: 7, b: 3, c: 0 });
   assert.equal(summarize(g).done, false);
-  const ended = reduce([...players('a', 'b', 'c'), game('free', ['a', 'b', 'c'], { entry: 'bids', cards: 'fixed', maxCards: 5, trickPoints: 1, hitBase: 5, hitPerTrick: 0 }),
+  const ended = reduce([...players('a', 'b', 'c'), game('free', ['a', 'b', 'c'], { entry: 'bids', cards: 'fixed', cardsFixed: 5, trickPoints: 1, hitBase: 5, hitPerTrick: 0 }),
     round({ id: 'r1', bids: { a: 2, b: 1, c: 1 }, tricks: { a: 2, b: 3, c: 0 } }), { id: 'ev-end', type: 'endGame', gid: 'g', ended: true }]).games.g;
   const sum = summarize(ended);
   assert.equal(sum.done, true);
@@ -193,4 +193,50 @@ test('🌟 points: made, failed, zero-miss, and 0 = like a normal bid', () => {
   const g = reduce([...players('a', 'b', 'c', 'd'), game('amerikaner', ['a', 'b', 'c', 'd']),
     round({ id: 'r1', contract: { kurtier: 'a', partner: 'b', bid: 13 }, tricks: { c: 0, d: 0 } })]).games.g;
   assert.deepEqual(scoreRound(g, g.rounds[0]), { a: 13, b: 13, c: 0, d: 0 });
+});
+
+const seq = (from, turn, to) => sequence({ cards: 'varies', cardsFrom: from, cardsTurn: turn, cardsTo: to });
+
+test('card sequences: up and down, down and up, one way, uneven', () => {
+  assert.deepEqual(seq(10, 1, 10), [10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+  assert.equal(seq(1, 10, 1).length, 20);
+  assert.deepEqual(seq(1, 10, 1).slice(8, 12), [9, 10, 10, 9]);
+  assert.deepEqual(seq(5, 1, 1), [5, 4, 3, 2, 1]); // one way
+  assert.deepEqual(seq(7, 3, 5), [7, 6, 5, 4, 3, 3, 4, 5]);
+  assert.deepEqual(seq(3, 3, 3), [3]);
+  assert.equal(sequence({ cards: 'fixed' }), null);
+});
+
+test('old saved rules (updown/downup/fixed + maxCards) still mean the same', () => {
+  const read = (rules) => reduce([...players('a', 'b'), { id: 'g', type: 'newGame', gid: 'g', rules, players: ['a', 'b'], at: 1 }]).games.g.rules;
+  const up = read({ cards: 'updown', maxCards: 7, entry: 'bids' });
+  assert.deepEqual([up.cards, up.cardsFrom, up.cardsTurn, up.cardsTo, up.maxCards], ['varies', 1, 7, 1, undefined]);
+  const down = read({ cards: 'downup', maxCards: 10, entry: 'bids' });
+  assert.deepEqual([down.cardsFrom, down.cardsTurn, down.cardsTo], [10, 1, 10]);
+  assert.equal(read({ cards: 'fixed', maxCards: 6, entry: 'bids' }).cardsFixed, 6);
+  assert.equal(matchPreset({ ...read({ cards: 'downup', maxCards: 10, entry: 'bids' }) }), 'selbuvist');
+});
+
+test('not enough cards: the limit and the fix', () => {
+  const rules = presetRules('selbuvist');
+  const p = playerProblem(rules, 6);
+  assert.equal(p.key, 'rules.deck');
+  assert.equal(p.fit, 8);
+  assert.equal(deckFit(6), 8);
+  const fixed = capCards(rules, p.fit);
+  assert.deepEqual([fixed.cardsFrom, fixed.cardsTurn, fixed.cardsTo], [8, 1, 8]);
+  assert.equal(playerProblem(fixed, 6), null);
+  assert.deepEqual(sequence(fixed).length, 16);
+  const am = capCards({ ...presetRules('selbuvist'), cards: 'fixed', cardsFixed: 10 }, 8);
+  assert.equal(am.cardsFixed, 8);
+});
+
+test('card options depend on the round type', () => {
+  assert.deepEqual(cardOptions('scores'), []);
+  assert.deepEqual(cardOptions('contract'), ['deck', 'fixed']);
+  const fromBids = fitCardsToEntry({ ...presetRules('selbuvist'), entry: 'contract' });
+  assert.equal(fromBids.cards, 'deck');
+  assert.equal(fitCardsToEntry({ ...presetRules('selbuvist'), entry: 'scores' }).cards, 'none');
+  assert.equal(fitCardsToEntry({ ...presetRules('free'), entry: 'contract' }).cards, 'deck');
+  assert.equal(fitCardsToEntry({ ...presetRules('amerikaner'), entry: 'bids' }).cards, 'deck');
 });
