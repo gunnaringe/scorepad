@@ -21,15 +21,14 @@
 :root,
 [data-theme="hytte"] {
   color-scheme: light;
-  /* Hytte: the inside of a cabin on a winter evening. Knotty-pine panelling
-     in lamp light, darker stained boards up top, linen-cream paper, rust red
-     and honey gold. */
-  --bg: #8a5630;
+  /* Hytte: the inside of a cabin. Light knotty-pine panelling with a lamp
+     glow, darker stained boards up top, linen-cream paper, rust red and honey
+     gold. Text straight on the wall is dark brown. */
+  --bg: #c98f58;
   --bg-image:
-    radial-gradient(90% 50% at 50% 0%, rgb(255 205 130 / .2), transparent 70%),
-    radial-gradient(130% 50% at 50% 110%, rgb(255 150 60 / .2), transparent 70%),
-    linear-gradient(90deg, rgb(15 5 0 / .5), transparent 24%, transparent 76%, rgb(15 5 0 / .5)),
-    linear-gradient(rgb(28 11 2 / .33), rgb(28 11 2 / .33)),
+    radial-gradient(90% 50% at 50% 0%, rgb(255 225 160 / .28), transparent 70%),
+    radial-gradient(130% 50% at 50% 110%, rgb(255 170 80 / .22), transparent 70%),
+    linear-gradient(90deg, rgb(40 15 0 / .26), transparent 22%, transparent 78%, rgb(40 15 0 / .26)),
     url(/themes/panel.svg);
   --bar: #3a2218;
   --bar-ink: #fff3dc;
@@ -44,7 +43,7 @@
   --accent-ink: #fff7ee;
   --accent-2: #35604a;
   --accent-2-ink: #ffffff;
-  --warn: #f6c35c;
+  --warn: #8a2410;
   --gold: #eba843;
   --lead: #fde7b5;
   --hit: #2f7a4f;
@@ -52,8 +51,8 @@
   --chip: #f2e3c5;
   --chip-ink: #3b2519;
   --shadow: 0 1px 0 rgb(255 255 255 / .5) inset, 0 2px 0 rgb(0 0 0 / .06), 0 12px 28px rgb(25 8 0 / .38);
-  --on-bg: #fff3dc;
-  --on-bg-muted: #e3cca7;
+  --on-bg: #26130a;
+  --on-bg-muted: #55361f;
   --knit-a: #b23a2c;
   --knit-b: #fff3dc;
   --knit-c: #35604a;
@@ -990,8 +989,49 @@ body[data-view="dash"] { overflow: hidden; }
     linear-gradient(135deg, transparent 0 42%, #fffaf0 42% 68%, #b23a2c 68%),
     repeating-linear-gradient(90deg, #b9783f 0 5px, #4a2711 5px 6px);
 }
-/* Text that sits straight on the wall gets a soft shadow so it stays readable. */
-[data-theme="hytte"] .page > .stack > section > h2, [data-theme="hytte"] .page .hint, [data-theme="hytte"] .page > .stack > .stack > .link, [data-theme="hytte"] .empty {
-  text-shadow: 0 1px 3px rgb(20 7 0 / .6);
+/* Text straight on the light wall sits on small cream paper labels. */
+[data-theme="hytte"] .page > .stack > section:not(.card) > h2 {
+  display: inline-block; padding: .15rem .8rem; border-radius: 99px;
+  background: rgb(255 247 230 / .9); color: var(--ink); text-shadow: none;
+  box-shadow: 0 1px 0 rgb(80 40 10 / .25), 0 3px 8px rgb(60 25 5 / .18);
 }
-[data-theme="hytte"] .card, [data-theme="hytte"] .card * { text-shadow: none; }
+[data-theme="hytte"] .page > .stack > section:not(.card) > h2 .muted { color: var(--muted); }
+[data-theme="hytte"] .page .hint, [data-theme="hytte"] .empty, [data-theme="hytte"] .page .link {
+  background: rgb(255 247 230 / .86); color: var(--ink); border-radius: 12px; padding: .3rem .7rem; text-shadow: none;
+  box-shadow: 0 1px 0 rgb(80 40 10 / .2);
+}
+[data-theme="hytte"] .page .link { border-radius: 99px; padding: .35rem 1rem; display: inline-block; }
+[data-theme="hytte"] .page .link.center, [data-theme="hytte"] .page .stack > .link { display: block; width: max-content; max-width: 100%; margin-inline: auto; }
+[data-theme="hytte"] .page .hint.warn { color: var(--warn); font-weight: 600; }
+[data-theme="hytte"] .empty { border-radius: 16px; }
+/* Inside the cream cards nothing extra. */
+[data-theme="hytte"] .card .hint, [data-theme="hytte"] .card .link, [data-theme="hytte"] .card h2 {
+  background: none; box-shadow: none; padding: 0; text-shadow: none; display: revert; border-radius: 0;
+}
+[data-theme="hytte"] .card .link { display: inline; }
+[data-theme="hytte"] .card .hint { color: var(--muted); }
+[data-theme="hytte"] .card h2 { color: var(--ink); }
+
+
+/* Light wall: things that sit on the wall are dark, things on the dark bars stay light. */
+[data-theme="hytte"] .action-bar .btn:disabled { color: #e3cca7; box-shadow: inset 0 0 0 2px rgb(227 204 167 / .5); }
+[data-theme="hytte"] .hero h1 { text-shadow: 0 0 24px rgb(233 165 58 / .45); }
+[data-theme="hytte"] .dash-head h1 { text-shadow: 0 1px 2px rgb(255 236 200 / .6); }
+[data-theme="hytte"] .dash-head, [data-theme="hytte"] .dash-info, [data-theme="hytte"] .board-legend { text-shadow: 0 1px 2px rgb(255 236 200 / .5); }
+[data-theme="hytte"] .dash::before { opacity: .22; }
+
+/* Big screen on the light wall: header and legend on cream labels, no ghost cabin. */
+[data-theme="hytte"] .dash::before { display: none; }
+[data-theme="hytte"] .dash-head > .grow {
+  align-self: flex-start; padding: .35em .9em .45em; border-radius: 18px; text-shadow: none;
+  background: rgb(255 247 230 / .9); box-shadow: 0 1px 0 rgb(80 40 10 / .25), 0 6px 16px rgb(60 25 5 / .2);
+}
+[data-theme="hytte"] .dash-head h1 { text-shadow: none; color: var(--ink); }
+[data-theme="hytte"] .dash-head .dash-info, [data-theme="hytte"] .dash-head .dash-info .muted { color: var(--muted); text-shadow: none; }
+[data-theme="hytte"] .dash-head .dash-info strong { color: var(--ink); }
+[data-theme="hytte"] .board-legend {
+  align-self: flex-end; margin-right: 4.2em; padding: .15em .8em; border-radius: 99px; text-shadow: none;
+  background: rgb(255 247 230 / .9); color: var(--muted); box-shadow: 0 1px 0 rgb(80 40 10 / .2);
+}
+[data-theme="hytte"] .dash .exit { color: var(--ink); opacity: .55; }
+[data-theme="hytte"] .dash-head > .grow { flex: 0 1 auto; }
