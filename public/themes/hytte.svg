@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 150">
+  <!-- Hytte theme art: a log cabin with glowing windows, pines, snow and a moon. -->
+  <style>
+    .smoke { fill: #fff7ea; animation: rise 4s ease-in-out infinite; }
+    .s2 { animation-delay: -1.3s; }
+    .s3 { animation-delay: -2.6s; }
+    @keyframes rise { 0% { transform: translate(0, 8px) scale(.7); opacity: 0; } 30% { opacity: .45; } 100% { transform: translate(5px, -9px) scale(1.2); opacity: 0; } }
+    .flicker { animation: flick 3.4s ease-in-out infinite; }
+    @keyframes flick { 0%, 100% { opacity: 1; } 45% { opacity: .82; } 60% { opacity: .95; } }
+    @media (prefers-reduced-motion: reduce) { .smoke, .flicker { animation: none; } .smoke { opacity: .3; } }
+  </style>
+  <defs>
+    <radialGradient id="glow"><stop offset="0" stop-color="#ffd36b" stop-opacity=".6"/><stop offset="1" stop-color="#ffd36b" stop-opacity="0"/></radialGradient>
+    <linearGradient id="win" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffeab0"/><stop offset="1" stop-color="#ffb347"/></linearGradient>
+    <linearGradient id="snow" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff9ee"/><stop offset="1" stop-color="#e3d7c0"/></linearGradient>
+  </defs>
+
+  <g fill="#fff2cf">
+    <circle cx="22" cy="14" r="1.4"/><circle cx="96" cy="26" r="1"/><circle cx="140" cy="10" r="1.3"/>
+    <circle cx="214" cy="16" r="1"/><circle cx="262" cy="30" r="1.4"/><circle cx="338" cy="22" r="1"/>
+    <circle cx="74" cy="8" r="1"/><circle cx="296" cy="8" r="1.2"/>
+  </g>
+  <path d="M316 16a15 15 0 1 0 9 27 12 12 0 0 1-9-27Z" fill="#fff0c6"/>
+
+  <path d="M30.0 38.0 L46.6 62.6 L38.3 62.6 L51.8 89.0 L42.5 89.0 L56.0 126.0 L4.0 126.0 L17.5 89.0 L8.2 89.0 L21.7 62.6 L13.4 62.6Z" fill="#264d3b"/><rect x="27.4" y="126.0" width="5.2" height="8.8" fill="#4a2e1f"/><path d="M30.0 38.0 L38.8 55.6 Q30.0 51.2 21.2 55.6Z" fill="#fff7ea" opacity=".95"/><path d="M14.4 64.4 Q24.8 57.4 45.6 64.4 L46.6 62.6 L13.4 62.6Z" fill="#fff7ea" opacity=".8"/><path d="M66.0 68.0 L78.2 85.4 L72.1 85.4 L82.0 104.0 L75.1 104.0 L85.0 130.0 L47.0 130.0 L56.9 104.0 L50.0 104.0 L59.9 85.4 L53.8 85.4Z" fill="#2f5a45"/><rect x="64.1" y="130.0" width="3.8" height="6.2" fill="#4a2e1f"/><path d="M66.0 68.0 L72.5 80.4 Q66.0 77.3 59.5 80.4Z" fill="#fff7ea" opacity=".95"/><path d="M54.6 86.6 Q62.2 81.6 77.4 86.6 L78.2 85.4 L53.8 85.4Z" fill="#fff7ea" opacity=".8"/><path d="M318.0 30.0 L335.9 56.9 L327.0 56.9 L341.5 85.7 L331.4 85.7 L346.0 126.0 L290.0 126.0 L304.6 85.7 L294.5 85.7 L309.0 56.9 L300.1 56.9Z" fill="#264d3b"/><rect x="315.2" y="126.0" width="5.6" height="9.6" fill="#4a2e1f"/><path d="M318.0 30.0 L327.5 49.2 Q318.0 44.4 308.5 49.2Z" fill="#fff7ea" opacity=".95"/><path d="M301.2 58.8 Q312.4 51.1 334.8 58.8 L335.9 56.9 L300.1 56.9Z" fill="#fff7ea" opacity=".8"/><path d="M346.0 74.0 L356.9 89.7 L351.4 89.7 L360.3 106.5 L354.2 106.5 L363.0 130.0 L329.0 130.0 L337.8 106.5 L331.7 106.5 L340.6 89.7 L335.1 89.7Z" fill="#2f5a45"/><rect x="344.3" y="130.0" width="3.4" height="5.6" fill="#4a2e1f"/><path d="M346.0 74.0 L351.8 85.2 Q346.0 82.4 340.2 85.2Z" fill="#fff7ea" opacity=".95"/><path d="M335.8 90.8 Q342.6 86.3 356.2 90.8 L356.9 89.7 L335.1 89.7Z" fill="#fff7ea" opacity=".8"/><path d="M288.0 78.0 L298.2 92.6 L293.1 92.6 L301.4 108.2 L295.7 108.2 L304.0 130.0 L272.0 130.0 L280.3 108.2 L274.6 108.2 L282.9 92.6 L277.8 92.6Z" fill="#35654d"/><rect x="286.4" y="130.0" width="3.2" height="5.2" fill="#4a2e1f"/><path d="M288.0 78.0 L293.4 88.4 Q288.0 85.8 282.6 88.4Z" fill="#fff7ea" opacity=".95"/><path d="M278.4 93.6 Q284.8 89.4 297.6 93.6 L298.2 92.6 L277.8 92.6Z" fill="#fff7ea" opacity=".8"/>
+
+  <path d="M0 133C58 122 120 129 180 125S300 120 360 129V150H0Z" fill="url(#snow)"/>
+  <ellipse cx="180" cy="135" rx="70" ry="7" fill="#ffd36b" opacity=".3"/>
+
+  <!-- cabin -->
+  <rect x="118" y="72" width="124" height="54" rx="2" fill="#8d4e2b"/>
+  <path d="M118 80 H242" stroke="#5f3118" stroke-width="1.6"/><path d="M118 88 H242" stroke="#5f3118" stroke-width="1.6"/><path d="M118 96 H242" stroke="#5f3118" stroke-width="1.6"/><path d="M118 104 H242" stroke="#5f3118" stroke-width="1.6"/><path d="M118 112 H242" stroke="#5f3118" stroke-width="1.6"/><path d="M118 120 H242" stroke="#5f3118" stroke-width="1.6"/>
+  <circle cx="118" cy="76" r="3.7" fill="#a35c30" stroke="#5f3118" stroke-width="1.2"/><circle cx="242" cy="76" r="3.7" fill="#a35c30" stroke="#5f3118" stroke-width="1.2"/><circle cx="118" cy="84" r="3.7" fill="#a35c30" stroke="#5f3118" stroke-width="1.2"/><circle cx="242" cy="84" r="3.7" fill="#a35c30" stroke="#5f3118" stroke-width="1.2"/><circle cx="118" cy="92" r="3.7" fill="#a35c30" stroke="#5f3118" stroke-width="1.2"/><circle cx="242" cy="92" r="3.7" fill="#a35c30" stroke="#5f3118" stroke-width="1.2"/><circle cx="118" cy="100" r="3.7" fill="#a35c30" stroke="#5f3118" stroke-width="1.2"/><circle cx="242" cy="100" r="3.7" fill="#a35c30" stroke="#5f3118" stroke-width="1.2"/><circle cx="118" cy="108" r="3.7" fill="#a35c30" stroke="#5f3118" stroke-width="1.2"/><circle cx="242" cy="108" r="3.7" fill="#a35c30" stroke="#5f3118" stroke-width="1.2"/><circle cx="118" cy="116" r="3.7" fill="#a35c30" stroke="#5f3118" stroke-width="1.2"/><circle cx="242" cy="116" r="3.7" fill="#a35c30" stroke="#5f3118" stroke-width="1.2"/>
+  <path d="M112 76 180 40 248 76Z" fill="#7a4024"/>
+  <path d="M164 50 H196" stroke="#5f3118" stroke-width="1.4"/><path d="M154 58 H206" stroke="#5f3118" stroke-width="1.4"/><path d="M144 66 H216" stroke="#5f3118" stroke-width="1.4"/><path d="M134 74 H226" stroke="#5f3118" stroke-width="1.4"/>
+  <path d="M100 79 180 34 260 79 255 82 180 41 105 82Z" fill="#5b2f1c"/>
+  <path d="M96 80 180 31 264 80 259 80 180 37 101 80Z" fill="#fff7ea"/>
+  <rect x="212" y="40" width="14" height="22" fill="#6b3a24"/>
+  <rect x="209.5" y="37" width="19" height="5" rx="2.5" fill="#fff7ea"/>
+  <g>
+    <circle class="smoke" cx="219" cy="32" r="5"/>
+    <circle class="smoke s2" cx="221" cy="25" r="5.5"/>
+    <circle class="smoke s3" cx="218" cy="17" r="6"/>
+  </g>
+
+  <g class="flicker">
+    <circle cx="145" cy="98" r="28" fill="url(#glow)"/>
+    <circle cx="215" cy="98" r="28" fill="url(#glow)"/>
+  </g>
+  <g stroke="#4d2616" stroke-width="2.6" fill="url(#win)">
+    <rect x="132" y="88" width="26" height="20" rx="2"/>
+    <rect x="202" y="88" width="26" height="20" rx="2"/>
+  </g>
+  <g stroke="#4d2616" stroke-width="1.8">
+    <path d="M145 88V108M132 98H158M215 88V108M202 98H228"/>
+  </g>
+  <rect x="170" y="92" width="20" height="34" rx="2" fill="#4a2514"/>
+  <rect x="174" y="96" width="12" height="9" rx="1" fill="url(#win)" stroke="#2f180d" stroke-width="1"/>
+  <circle cx="186" cy="113" r="1.5" fill="#e9b44c"/>
+  <rect x="165" y="126" width="30" height="4" rx="1.5" fill="#d8caa8"/>
+  <path d="M180 103.4c-1.2-1.6-3.4-.8-3.2 1 .2 1.2 1.6 2 3.2 3.1 1.6-1.1 3-1.9 3.2-3.1.2-1.8-2-2.6-3.2-1Z" fill="#c4483a" transform="translate(-3 9)"/>
+</svg>

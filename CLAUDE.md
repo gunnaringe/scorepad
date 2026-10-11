@@ -123,7 +123,9 @@ don't reuse its names, D1 database or rate-limit namespace (`1001`).
   plain text, `tt()` HTML-escaped. Player names are user text, so always go
   through `esc()`/`tt()`.
 - **Themes:** custom properties per `html[data-theme]` in `styles.css`. Only
-  the theme blocks set colors. Hytte gets the knitted band and candle glow;
+  the theme blocks set colors. Hytte is a log cabin at dusk (timber-wall background with a fireplace glow,
+  the Selbu wool band `public/themes/knit.svg` under bars, the cabin scene
+  `public/themes/hytte.svg` on the home screen and big screen);
   Kos (`cozy`) a waffle-grid texture, snow and `public/themes/cozy.svg`
   (skis, hot chocolate, heart waffle) on the home screen and the big screen.
 - **Sticky table:** `.table-scroll` is the only scroller in the game view

@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="48" height="14" viewBox="0 0 48 14">
+  <!-- Wool band: cream stripes, diamonds and gold dots on deep red. Tiles sideways. -->
+  <rect width="48" height="14" fill="#7d2a20"/>
+  <rect y="1" width="48" height="1.4" fill="#f3e2bd"/>
+  <rect y="11.6" width="48" height="1.4" fill="#f3e2bd"/>
+  <g fill="#f3e2bd">
+    <path d="M24 3 31 7 24 11 17 7Z"/>
+    <path d="M0 3 7 7 0 11-7 7Z"/>
+    <path d="M48 3 55 7 48 11 41 7Z"/>
+  </g>
+  <g fill="#c4483a">
+    <path d="M24 4.9 28 7 24 9.1 20 7Z"/>
+    <path d="M0 4.9 4 7 0 9.1-4 7Z"/>
+    <path d="M48 4.9 52 7 48 9.1 44 7Z"/>
+  </g>
+  <g fill="#e9b44c">
+    <circle cx="24" cy="7" r="1"/><circle cx="0" cy="7" r="1"/><circle cx="48" cy="7" r="1"/>
+    <circle cx="12" cy="7" r="1.15"/><circle cx="36" cy="7" r="1.15"/>
+  </g>
+</svg>

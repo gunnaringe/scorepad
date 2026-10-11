@@ -21,38 +21,42 @@
 :root,
 [data-theme="hytte"] {
   color-scheme: light;
-  /* Dark pine boards behind a cream score pad, wool red and pine green. */
-  --bg: #3a2416;
+  /* Hytte: a log cabin on a winter evening. A timber wall in lamp light with
+     a fireplace glow, linen-cream paper, rust red and honey gold. */
+  --bg: #5b3a27;
   --bg-image:
-    repeating-linear-gradient(90deg, rgb(0 0 0 / .18) 0 2px, transparent 2px 92px),
-    repeating-linear-gradient(90deg, rgb(255 255 255 / .025) 0 1px, transparent 1px 7px, rgb(0 0 0 / .03) 7px 9px, transparent 9px 23px),
-    linear-gradient(180deg, #4a2e1c, #2f1d12);
-  --bar: #3b2417;
-  --bar-ink: #f8ecd4;
-  --paper: #fbf3e2;
-  --paper-head: #f3e4c4;
-  --paper-alt: #f6ead2;
-  --ink: #3a2618;
-  --muted: #6f5641;
-  --line: #e2cfa8;
-  --margin: #d98b7f;
-  --accent: #a8322a;
-  --accent-ink: #fff6ea;
-  --accent-2: #2f5a45;
+    radial-gradient(130% 55% at 50% 108%, rgb(255 150 60 / .34), rgb(255 120 40 / .1) 45%, transparent 70%),
+    linear-gradient(90deg, rgb(10 3 0 / .5), transparent 22%, transparent 78%, rgb(10 3 0 / .5)),
+    repeating-linear-gradient(180deg,
+      rgb(255 214 160 / .09) 0, rgb(255 214 160 / .05) 4px, transparent 14px,
+      transparent 46px, rgb(0 0 0 / .16) 56px, rgb(0 0 0 / .42) 62px, rgb(0 0 0 / .62) 64px),
+    linear-gradient(180deg, #6a4430, #4d2f20);
+  --bar: #3a2218;
+  --bar-ink: #fff3dc;
+  --paper: #fffaf0;
+  --paper-head: #f6e5c0;
+  --paper-alt: #fcf2e0;
+  --ink: #3b2519;
+  --muted: #6c523f;
+  --line: #ead9b4;
+  --margin: #d9857a;
+  --accent: #b23a2c;
+  --accent-ink: #fff7ee;
+  --accent-2: #35604a;
   --accent-2-ink: #ffffff;
-  --warn: #f2b84b;
-  --gold: #e9a53a;
-  --lead: #fde6b2;
+  --warn: #f6c35c;
+  --gold: #eba843;
+  --lead: #fde7b5;
   --hit: #2f7a4f;
-  --miss: #b0483c;
-  --chip: #efe1c3;
-  --chip-ink: #3a2618;
-  --shadow: 0 2px 0 rgb(0 0 0 / .08), 0 10px 24px rgb(20 8 0 / .28);
-  --on-bg: #f8ecd4;
-  --on-bg-muted: #d7bf9c;
-  --knit-a: #a8322a;
-  --knit-b: #f8ecd4;
-  --knit-c: #2f5a45;
+  --miss: #b0392d;
+  --chip: #f2e3c5;
+  --chip-ink: #3b2519;
+  --shadow: 0 1px 0 rgb(255 255 255 / .5) inset, 0 2px 0 rgb(0 0 0 / .06), 0 12px 28px rgb(25 8 0 / .38);
+  --on-bg: #fff3dc;
+  --on-bg-muted: #e3cca7;
+  --knit-a: #b23a2c;
+  --knit-b: #fff3dc;
+  --knit-c: #35604a;
 }
 
 [data-theme="lys"] {
@@ -248,12 +252,9 @@ p { margin: 0; }
 .bar h1 { flex: 1; font-size: 1.15rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* Knitted band under the bar: the cabin's sweater pattern. */
 [data-theme="hytte"] .bar::after, [data-theme="hytte"] .hero::after {
-  content: ""; position: absolute; left: 0; right: 0; bottom: -8px; height: 8px;
-  background:
-    linear-gradient(135deg, var(--knit-a) 25%, transparent 25%) -4px 0 / 8px 8px,
-    linear-gradient(225deg, var(--knit-a) 25%, transparent 25%) -4px 0 / 8px 8px,
-    var(--knit-b);
-  pointer-events: none;
+  content: ""; position: absolute; left: 0; right: 0; bottom: -12px; height: 12px; pointer-events: none;
+  background: url(/themes/knit.svg) repeat-x 0 0 / auto 12px;
+  filter: drop-shadow(0 2px 3px rgb(0 0 0 / .35));
 }
 
 .icon-btn {
@@ -447,12 +448,8 @@ body[data-view="game"] .bar::after { display: none; }
 }
 .game-info strong { font-weight: 600; }
 [data-theme="hytte"] .game-info {
-  padding-bottom: calc(.5rem + 6px);
-  background:
-    linear-gradient(135deg, var(--knit-a) 25%, transparent 25%) -4px 100% / 8px 6px repeat-x,
-    linear-gradient(225deg, var(--knit-a) 25%, transparent 25%) -4px 100% / 8px 6px repeat-x,
-    linear-gradient(var(--knit-b), var(--knit-b)) 0 100% / 100% 6px no-repeat,
-    var(--bar);
+  padding-bottom: calc(.5rem + 12px);
+  background: url(/themes/knit.svg) repeat-x 0 100% / auto 12px, var(--bar);
 }
 .info-line.sub { opacity: .9; font-size: .9em; }
 .bal.over { color: #ffb4a8; }
@@ -562,7 +559,7 @@ dialog::backdrop { background: rgb(15 8 4 / .55); backdrop-filter: blur(2px); }
 }
 .theme-swatch.on { border-color: var(--accent); }
 .sw { width: 2.4rem; height: 2.4rem; border-radius: 50%; box-shadow: inset 0 0 0 2px rgb(0 0 0 / .15); }
-.sw-hytte { background: linear-gradient(135deg, #4a2e1c 0 45%, #fbf3e2 45% 70%, #a8322a 70%); }
+.sw-hytte { background: radial-gradient(circle at 70% 28%, #ffd36b 0 2.5px, transparent 3px), linear-gradient(135deg, #5b3a27 0 42%, #fffaf0 42% 68%, #b23a2c 68%); }
 .sw-lys { background: linear-gradient(135deg, #eef1f4 0 45%, #fff 45% 70%, #2563eb 70%); }
 .sw-mork { background: linear-gradient(135deg, #121417 0 45%, #1e2226 45% 70%, #e0675a 70%); }
 .sw-kontrast { background: linear-gradient(135deg, #000 0 55%, #ffe600 55%); }
@@ -724,7 +721,7 @@ body[data-view="dash"] { overflow: hidden; }
   .bar { padding-top: calc(.1rem + env(safe-area-inset-top)); padding-bottom: .1rem; }
   .bar .icon-btn { width: 2.5rem; height: 2.5rem; }
   .game-info { padding-block: .2rem; font-size: .85rem; display: flex; gap: .8rem; flex-wrap: wrap; }
-  [data-theme="hytte"] .game-info { padding-bottom: calc(.2rem + 6px); }
+  [data-theme="hytte"] .game-info { padding-bottom: calc(.2rem + 12px); }
   .action-bar { padding-block: .3rem calc(.3rem + env(safe-area-inset-bottom)); }
   .btn { min-height: 2.5rem; }
   .btn.big { min-height: 2.6rem; font-size: 1rem; }
@@ -937,3 +934,43 @@ body[data-view="dash"] { overflow: hidden; }
 .mini-stepper output { font-size: .9rem; }
 .rule-group { padding: .4rem 0; }
 .rule-group > .switch-row.half span { line-height: 1.15; }
+
+/* --- Hytte: the cabin at dusk ----------------------------------------------------- */
+
+[data-theme="hytte"] .hero {
+  background: radial-gradient(90% 140% at 50% 0, rgb(255 190 110 / .22), transparent 70%), var(--bar);
+}
+[data-theme="hytte"] .hero-art {
+  display: block; height: clamp(104px, 31vw, 150px); margin: .1rem auto -.1rem; max-width: 380px;
+  background: url(/themes/hytte.svg) center / contain no-repeat;
+}
+[data-theme="hytte"] .bar { background: linear-gradient(180deg, #45291c, #3a2218); }
+/* A softly lit pad: a little warmer toward the bottom. */
+[data-theme="hytte"] .card { border-radius: 22px; background: linear-gradient(180deg, #fffbf2, #fbf1de); }
+[data-theme="hytte"] .btn.primary:not(:disabled):not(.is-disabled) {
+  background: linear-gradient(180deg, #c8493a, #a43224);
+  box-shadow: 0 2px 0 #7a2216, 0 6px 14px rgb(120 30 15 / .35), inset 0 1px 0 rgb(255 255 255 / .22);
+}
+[data-theme="hytte"] .preset.on, [data-theme="hytte"] .segmented button.on, [data-theme="hytte"] .nchip.on, [data-theme="hytte"] .pchip.on {
+  background: linear-gradient(180deg, #c8493a, #a43224);
+}
+[data-theme="hytte"] .score thead th, [data-theme="hytte"] .score tfoot th, [data-theme="hytte"] .score tfoot td, [data-theme="hytte"] .score .rn {
+  background: linear-gradient(180deg, #f9ebc9, #f3dfb4);
+}
+[data-theme="hytte"] .score tfoot td.lead { background: linear-gradient(180deg, #fff0c4, #fddf9a); }
+[data-theme="hytte"] .score thead th.lead { box-shadow: inset 0 -4px 0 var(--gold), 0 6px 10px -6px rgb(235 168 67 / .8); }
+[data-theme="hytte"] .rank.r1 { box-shadow: 0 0 12px rgb(235 168 67 / .85); }
+[data-theme="hytte"] .dash::before {
+  content: ""; position: fixed; left: 0; bottom: 0; width: min(38vw, 440px); aspect-ratio: 360 / 150;
+  background: url(/themes/hytte.svg) left bottom / contain no-repeat; opacity: .3; pointer-events: none;
+}
+[data-theme="hytte"] .dash > * { position: relative; }
+
+[data-theme="hytte"] .dash::before, [data-theme="cozy"] .dash::before {
+  -webkit-mask-image: linear-gradient(90deg, #000 55%, transparent 100%); mask-image: linear-gradient(90deg, #000 55%, transparent 100%);
+}
+[data-theme="hytte"] .hero-art { height: clamp(116px, 36vw, 166px); }
+[data-theme="hytte"] .hero-art {
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 10%, #000 90%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 10%, #000 90%, transparent);
+}
