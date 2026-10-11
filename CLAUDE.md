@@ -135,7 +135,7 @@ don't reuse its names, D1 database or rate-limit namespace (`1001`).
   the Selbu wool band `public/themes/knit.svg` under bars, the cabin scene
   `public/themes/hytte.svg` on the home screen and big screen);
   Kos (`cozy`) a waffle-grid texture, snow and `public/themes/cozy.svg`
-  (skis, hot chocolate, heart waffle) on the home screen and the big screen.
+  (a heart waffle with jam) on the home screen and the big screen.
 - **Sticky table:** `.table-scroll` is the only scroller in the game view
   (`#view` is a 100dvh flex column), so `thead`/`tfoot`/first column stick
   inside it in both directions. Sticky cells need opaque backgrounds.

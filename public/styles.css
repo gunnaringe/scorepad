@@ -124,9 +124,9 @@
 
 [data-theme="cozy"] {
   color-scheme: light;
-  /* Kos: a snowy evening in, hot chocolate, heart waffles with jam, skis by
-     the door. Cocoa night with falling snow, whipped-cream paper, a golden
-     waffle grid, lingonberry red and ski blue. */
+  /* Kos: a snowy evening in with heart waffles and jam. Cocoa night with
+     falling snow, whipped-cream paper, a golden waffle grid, lingonberry red
+     and ski blue. */
   --bg: #2a1812;
   --bg-image:
     radial-gradient(circle at 20% 30%, rgb(255 244 230 / .55) 0 1.6px, transparent 2.2px) 0 0 / 90px 90px,
@@ -761,7 +761,7 @@ body[data-view="dash"] { overflow: hidden; }
 }
 [data-theme="cozy"] .card, [data-theme="cozy"] .preset { border-radius: 22px; }
 [data-theme="cozy"] .rank.r1 { box-shadow: 0 0 12px rgb(233 168 58 / .8); }
-/* Steaming mug in the corner of the big screen. */
+/* The waffle in the corner of the big screen. */
 [data-theme="cozy"] .dash::before {
   content: ""; position: fixed; left: 0; bottom: 0; width: min(36vw, 420px); aspect-ratio: 360 / 140;
   background: url(/themes/cozy.svg) left bottom / contain no-repeat; opacity: .22; pointer-events: none;
