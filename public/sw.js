@@ -8,10 +8,15 @@
 //
 // Bump CACHE only when changing what's precached or how.
 
-const CACHE = 'scorepad-v5';
+const CACHE = 'scorepad-v6';
+// Static pages besides the app.
+const PAGES = ['/privacy'];
+
 const PRECACHE = [
   '/',
+  '/privacy',
   '/styles.css',
+  '/theme.js',
   '/app.js',
   '/core.js',
   '/rules.js',
@@ -47,8 +52,10 @@ self.addEventListener('fetch', (e) => {
   const url = new URL(req.url);
   if (req.method !== 'GET' || url.origin !== location.origin || url.pathname.startsWith('/api/')) return;
 
-  // Navigations all get the one page; /s/CODE is routed client-side.
-  const key = req.mode === 'navigate' ? '/' : req;
+  // Navigations all get the one page (/s/CODE is routed client-side), except
+  // the static pages, which must never be cached as the app.
+  const page = url.pathname.replace(/\.html$/, '');
+  const key = req.mode === 'navigate' ? (PAGES.includes(page) ? page : '/') : req;
   e.respondWith(
     fetch(req)
       .then((res) => {

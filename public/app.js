@@ -60,6 +60,14 @@ function applyI18n(root = document) {
 const fmt = (n) => (n < 0 ? `−${-n}` : String(n));
 const signed = (n) => (n > 0 ? `+${n}` : n === 0 ? '±0' : fmt(n));
 
+// Ranks only mean something once someone is ahead: not before the first round,
+// and not while everyone is level.
+const ranked = (sum) => sum.completed > 0 && sum.sorted.some((pid) => sum.ranks[pid] !== 1);
+
+// Distance to the leader, signed as the totals go (behind is − normally, + with
+// lowWins). Leaders get nothing.
+const gapLabel = (sum, pid) => (sum.ranks[pid] === 1 ? '' : signed(sum.totals[pid] - sum.totals[sum.leaders[0]]));
+
 function dateLabel(ms) {
   const s = new Intl.DateTimeFormat(locale(), { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date(ms));
   return s.charAt(0).toUpperCase() + s.slice(1);
@@ -805,7 +813,7 @@ function cellHtml(game, row, pid) {
 }
 
 function tableHtml(game, sum, { interactive = true } = {}) {
-  const lead = new Set(sum.completed ? sum.leaders : []);
+  const lead = new Set(ranked(sum) ? sum.leaders : []);
   const labels = shortNames(game.players.map(pname));
   const head = game.players.map((pid, i) => {
     const short = labels[i] !== pname(pid);
@@ -819,15 +827,18 @@ function tableHtml(game, sum, { interactive = true } = {}) {
       <th scope="row" class="rn" title="${esc(title)}">${row.index + 1}</th>
       ${game.players.map((pid) => cellHtml(game, row, pid)).join('')}</tr>`;
   }).join('');
-  const foot = game.players.map((pid) => `<td class="${lead.has(pid) ? 'lead' : ''}">
-    <span class="v">${fmt(sum.totals[pid])}</span>${sum.completed ? `<span class="rank r${sum.ranks[pid]}">${sum.ranks[pid]}</span>` : ''}</td>`).join('');
+  // Totals sit right under the names. The gap line is always there (empty for
+  // leaders and before anyone is ahead) so the header never changes height.
+  const totals = game.players.map((pid) => `<td class="${lead.has(pid) ? 'lead' : ''}">
+    <span class="v">${fmt(sum.totals[pid])}</span>${ranked(sum) ? `<span class="rank r${sum.ranks[pid]}">${sum.ranks[pid]}</span>` : ''}
+    <span class="gap">${ranked(sum) ? gapLabel(sum, pid) : ''}</span></td>`).join('');
   const cols = game.players.length + 1;
   const endLink = interactive && !sum.done && sum.completed ? `<button type="button" class="link end-link" id="end-game">${icon('flag')}${tt('menu.end')}</button>` : '';
   return `<table class="score">
-    <thead><tr><th class="corner" scope="col">#</th>${head}</tr></thead>
+    <thead><tr><th class="corner" scope="col">#</th>${head}</tr>
+      <tr class="sum-row"><th scope="row" class="corner" title="${tt('table.total')}" aria-label="${tt('table.total')}">Σ</th>${totals}</tr></thead>
     <tbody>${rows || `<tr class="empty-row"><td colspan="${cols}">${tt('table.empty')}</td></tr>`}
       <tr class="filler"><td colspan="${cols}">${endLink}</td></tr></tbody>
-    <tfoot><tr><th scope="row" class="corner">Σ</th>${foot}</tr></tfoot>
   </table>`;
 }
 
@@ -1789,12 +1800,23 @@ function openSettings() {
       <h3>${tt('settings.recent')}</h3>
       <div class="chips">${recent.map((p) => `<button type="button" class="chip removable" data-forget="${esc(p.name)}" aria-label="${tt('settings.forget', { name: p.name })}">${esc(p.name)} ${icon('x')}</button>`).join('')}</div>
     </section>` : ''}
-    <p class="muted small center">${tt('settings.about')}</p>`, () => {
+    <section>
+      <button type="button" class="btn danger" id="clear-all">${icon('trash')}${tt('settings.clear')}</button>
+    </section>
+    <p class="muted small center">${tt('settings.about')} <a href="/privacy" target="_blank" rel="noopener">${tt('settings.privacy')}</a></p>`, () => {
     refreshConnection();
     for (const b of $$('[data-lang]', dlg)) b.onclick = () => { settings.lang = b.dataset.lang; saveAndApply(); openSettings(); render(); };
     for (const b of $$('[data-theme-pick]', dlg)) b.onclick = () => { settings.theme = b.dataset.themePick; saveAndApply(); openSettings(); };
     $('#wake').onchange = (e) => { settings.wake = e.target.checked; saveAndApply(); updateWake(); };
     for (const b of $$('[data-forget]', dlg)) b.onclick = () => { store.forgetPlayer(b.dataset.forget); b.remove(); };
+    $('#clear-all').onclick = async () => {
+      if (!(await ask(t('settings.clearConfirm'), { ok: t('ask.delete'), danger: true }))) return;
+      live?.close();
+      live = null;
+      store.clearAll();
+      // A fresh start: settings, language and theme go back to the defaults.
+      location.replace('/');
+    };
   });
 }
 
@@ -1887,8 +1909,8 @@ function renderDash() {
     const bumped = prevTotals[`${game.id}:${pid}`] !== undefined && prevTotals[`${game.id}:${pid}`] !== sum.totals[pid];
     prevTotals[`${game.id}:${pid}`] = sum.totals[pid];
     const delta = last?.scores?.[pid];
-    return `<li class="${sum.completed && sum.ranks[pid] === 1 ? 'lead' : ''}${bumped ? ' bump' : ''}" style="--w:${Math.max(0, sum.totals[pid]) / max}">
-      <span class="d-rank">${sum.completed ? sum.ranks[pid] : ''}</span>
+    return `<li class="${ranked(sum) && sum.ranks[pid] === 1 ? 'lead' : ''}${bumped ? ' bump' : ''}" style="--w:${Math.max(0, sum.totals[pid]) / max}">
+      <span class="d-rank">${ranked(sum) ? sum.ranks[pid] : ''}</span>
       <span class="d-name">${esc(pname(pid))}${sum.dealer === pid && !sum.done ? ` <span class="deal-mark">${icon('cards')}</span>` : ''} ${sub(pid)}</span>
       <span class="d-delta">${delta != null ? signed(delta) : ''}</span>
       <span class="d-total">${fmt(sum.totals[pid])}</span>

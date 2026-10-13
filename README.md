@@ -9,8 +9,8 @@ Score keeping for card games, built for phones at the cabin table:
   rest, first to 52) are presets; every rule can be tweaked, also mid-game
   (all rounds are rescored). Bids are entered first and shown while the hand
   is played, then the tricks; the app does the arithmetic.
-- **Table:** player names and totals stay visible while you scroll, in both
-  directions. Tap any round to edit or delete it. Totals are always
+- **Table:** player names and totals (with rank and the gap to the leader)
+  stay at the top while you scroll, in both directions. Tap any round to edit or delete it. Totals are always
   recalculated.
 - **Players:** autocomplete and one-tap chips from recent players, seating
   order and first dealer, "play again" with the dealer moved on one seat.
@@ -23,7 +23,8 @@ Score keeping for card games, built for phones at the cabin table:
 - **Themes:** Hytte (cabin, default), Kos (a mug of hot chocolate on a
   snowy night), Lys, Mørk, Høy kontrast. **Languages:**
   Norwegian and English.
-- Works offline as an installable app. No accounts, no tracking.
+- Works offline as an installable app. No accounts, no tracking: see the
+  [privacy page](https://poengblokka.apphub.casa/privacy).
 
 ## Development
 

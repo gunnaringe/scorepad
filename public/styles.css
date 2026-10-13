@@ -235,6 +235,11 @@ p { margin: 0; }
 .page section > h2 .muted { color: var(--on-bg-muted); font-weight: 400; }
 .stack { display: flex; flex-direction: column; gap: 1.25rem; }
 .stack.tight { gap: .6rem; }
+/* Static text pages (privacy). */
+.prose h2 { font-size: 1.3rem; color: var(--ink); }
+.prose h3 { font-size: 1.05rem; margin: 1.1rem 0 .3rem; }
+.prose p + p { margin-top: .6rem; }
+.prose a { color: var(--accent); }
 .row { display: flex; gap: .6rem; align-items: center; }
 .row.wrap { flex-wrap: wrap; }
 .grow { flex: 1; }
@@ -458,8 +463,8 @@ body[data-view="game"] .bar::after { display: none; }
 [data-theme="lys"] .bal.under { color: var(--hit); }
 .winner { font-size: 1.1rem; font-weight: 600; }
 
-/* The scroller is the only scrolling box in the game view, so sticky
-   header/footer/first column stick to it in both directions. */
+/* The scroller is the only scrolling box in the game view, so the sticky
+   header (names + totals) and first column stick to it in both directions. */
 .table-wrap { position: relative; flex: 1; min-height: 0; display: flex; }
 .table-scroll {
   flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain;
@@ -480,25 +485,27 @@ table.score {
   border-bottom: 1px solid var(--line);
   min-width: 4.4em;
 }
+/* The whole thead sticks, so the totals row follows the names whatever
+   their height. */
+.score thead { position: sticky; top: 0; z-index: 2; }
 .score thead th {
-  position: sticky; top: 0; z-index: 2;
   background: var(--paper-head); font-weight: 600; padding-block: .55em;
-  max-width: 8em; border-bottom: 2px solid var(--line);
+  max-width: 8em; border-bottom: 1px solid var(--line);
 }
 .score .pn { display: block; overflow: hidden; text-overflow: ellipsis; }
 .score thead th.lead { box-shadow: inset 0 -4px 0 var(--gold); }
-.score tfoot th, .score tfoot td {
-  position: sticky; bottom: 0; z-index: 2;
-  background: var(--paper-head); border-top: 2px solid var(--line); border-bottom: 0;
-  padding-block: .5em;
+.score .sum-row th, .score .sum-row td {
+  background: var(--paper-head); border-bottom: 2px solid var(--line);
+  padding-block: .3em .2em;
 }
+.score .sum-row .gap { display: block; min-height: 1.2em; font-size: .75em; line-height: 1.2; color: var(--muted); font-weight: 600; }
 .score .rn, .score .corner {
   position: sticky; left: 0; z-index: 1;
   min-width: 2.6em; width: 2.6em;
   background: var(--paper-head); color: var(--muted); font-weight: 500;
   border-right: 2px solid var(--margin); /* the red margin line of a pad */
 }
-.score thead .corner, .score tfoot .corner { z-index: 3; }
+.score thead .corner { z-index: 3; }
 .score tbody tr:nth-child(even) td { background: var(--paper-alt); }
 .score tbody tr[data-rid] { cursor: pointer; }
 .score tbody tr[data-rid]:hover td { background: var(--lead); }
@@ -510,8 +517,8 @@ table.score {
 .score .pending-row td { font-style: italic; }
 .score .pending-row td .sub { font-size: .9em; color: var(--accent-2); font-weight: 600; }
 .score .role { font-weight: 600; color: var(--accent-2); }
-.score tfoot td .v { font-size: 1.35em; font-weight: 700; display: inline; }
-.score tfoot td.lead { background: var(--lead); }
+.score .sum-row td .v { font-size: 1.35em; font-weight: 700; display: inline; }
+.score .sum-row td.lead { background: var(--lead); }
 .score .empty-row td { padding: 2em 1em; color: var(--muted); font-style: italic; }
 .rank {
   display: inline-grid; place-items: center; width: 1.3em; height: 1.3em; margin-left: .25em;
@@ -749,12 +756,11 @@ body[data-view="dash"] { overflow: hidden; }
 @media (max-height: 500px) { [data-theme="cozy"] .game-info { padding-bottom: calc(.2rem + 6px); } }
 /* Waffle texture on the sticky header and totals of the score table. */
 [data-theme="cozy"] .score thead th,
-[data-theme="cozy"] .score tfoot th,
-[data-theme="cozy"] .score tfoot td,
+[data-theme="cozy"] .score .sum-row td,
 [data-theme="cozy"] .score .rn {
   background: var(--waffle), var(--paper-head);
 }
-[data-theme="cozy"] .score tfoot td.lead { background: var(--waffle), var(--lead); }
+[data-theme="cozy"] .score .sum-row td.lead { background: var(--waffle), var(--lead); }
 [data-theme="cozy"] .btn.primary:not(:disabled):not(.is-disabled) {
   background: linear-gradient(180deg, #c53246, #a11f33);
   box-shadow: 0 2px 0 #7d1626, inset 0 1px 0 rgb(255 255 255 / .2);
@@ -953,10 +959,10 @@ body[data-view="dash"] { overflow: hidden; }
 [data-theme="hytte"] .preset.on, [data-theme="hytte"] .segmented button.on, [data-theme="hytte"] .nchip.on, [data-theme="hytte"] .pchip.on {
   background: linear-gradient(180deg, #c8493a, #a43224);
 }
-[data-theme="hytte"] .score thead th, [data-theme="hytte"] .score tfoot th, [data-theme="hytte"] .score tfoot td, [data-theme="hytte"] .score .rn {
+[data-theme="hytte"] .score thead th, [data-theme="hytte"] .score .sum-row td, [data-theme="hytte"] .score .rn {
   background: linear-gradient(180deg, #f9ebc9, #f3dfb4);
 }
-[data-theme="hytte"] .score tfoot td.lead { background: linear-gradient(180deg, #fff0c4, #fddf9a); }
+[data-theme="hytte"] .score .sum-row td.lead { background: linear-gradient(180deg, #fff0c4, #fddf9a); }
 [data-theme="hytte"] .score thead th.lead { box-shadow: inset 0 -4px 0 var(--gold), 0 6px 10px -6px rgb(235 168 67 / .8); }
 [data-theme="hytte"] .rank.r1 { box-shadow: 0 0 12px rgb(235 168 67 / .85); }
 [data-theme="hytte"] .dash::before {
@@ -1055,7 +1061,7 @@ body[data-view="dash"] { overflow: hidden; }
 [data-theme="hytte"] .card :is(.hint, .link, h2) { background-image: none; }
 /* The empty part of the table and the header/totals get the same paper. */
 :is([data-theme="hytte"], [data-theme="cozy"]) .score tbody tr.filler td { background-image: var(--paper-tex) !important; }
-[data-theme="hytte"] :is(.score thead th, .score tfoot th, .score tfoot td, .score .rn) {
+[data-theme="hytte"] :is(.score thead th, .score .sum-row td, .score .rn) {
   background-image: var(--paper-tex), linear-gradient(180deg, #f9ebc9, #f3dfb4);
 }
-[data-theme="hytte"] .score tfoot td.lead { background-image: var(--paper-tex), linear-gradient(180deg, #fff0c4, #fddf9a); }
+[data-theme="hytte"] .score .sum-row td.lead { background-image: var(--paper-tex), linear-gradient(180deg, #fff0c4, #fddf9a); }
