@@ -171,6 +171,8 @@ don't reuse its names, D1 database or rate-limit namespace (`1001`).
 ## Deploy
 
 Cloudflare Worker `scorepad` (never rename it: the custom domains are bound to
-it), Workers Builds on push to `main`. Agent sessions can't deploy by hand
+it), Workers Builds on push to `main`; other branches run `wrangler preview`
+(beta), which needs the `previews` block in `wrangler.jsonc`: give any new
+binding a Preview-safe copy there (own rate-limit namespace, never 2001). Agent sessions can't deploy by hand
 (Cloudflare credentials there are read-only). Free plan: SQLite-backed Durable
 Objects only, which this uses.

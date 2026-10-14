@@ -24,6 +24,18 @@
   "ratelimits": [
     { "name": "JOIN_LIMIT", "namespace_id": "2001", "simple": { "limit": 30, "period": 60 } }
   ],
+  // Branch builds run `wrangler preview`, which needs this block. Each Preview
+  // gets its own Durable Object namespace and storage automatically; the
+  // binding just has to be declared again. The rate limiter gets its own
+  // namespace (2002) so previews never share production's counters (2001).
+  "previews": {
+    "durable_objects": {
+      "bindings": [{ "name": "SESSIONS", "class_name": "Session" }]
+    },
+    "ratelimits": [
+      { "name": "JOIN_LIMIT", "namespace_id": "2002", "simple": { "limit": 30, "period": 60 } }
+    ]
+  },
   "workers_dev": false,
   "preview_urls": false,
   "routes": [
