@@ -68,6 +68,7 @@ export const I18N = {
 
     'table.bid': 'bud',
     'table.empty': 'Ingen runder ennå',
+    'table.total': 'Sum',
 
     'bids.sum': 'Sum bud {n}',
     'bids.over': 'overmeldt {n}',
@@ -224,6 +225,9 @@ export const I18N = {
     'menu.rules': "Regler",
     'dash.lastRound': "Forrige runde",
     'settings.forget': "Glem {name}",
+    'settings.clear': "Slett alle data på denne enheten",
+    'settings.clearConfirm': "Slette alle spillkvelder, nylige spillere og innstillinger fra denne enheten? Delte spillkvelder blir liggende for de andre til de utløper.",
+    'settings.privacy': "Personvern",
     'game.finished': "Ferdig · {n} runder",
     'game.leadsTarget': "{names} leder med {score} · {left} igjen til {target}",
     'game.editHint': "Tips: trykk på en rad for å endre den.",
@@ -352,6 +356,7 @@ export const I18N = {
 
     'table.bid': 'bid',
     'table.empty': 'No rounds yet',
+    'table.total': 'Total',
 
     'bids.sum': 'Bids total {n}',
     'bids.over': 'overbid {n}',
@@ -508,6 +513,9 @@ export const I18N = {
     'menu.rules': "Rules",
     'dash.lastRound': "Last round",
     'settings.forget': "Forget {name}",
+    'settings.clear': "Delete all data on this device",
+    'settings.clearConfirm': "Delete all game nights, recent players and settings from this device? Shared game nights stay for the others until they expire.",
+    'settings.privacy': "Privacy",
     'game.finished': "Finished · {n} rounds",
     'game.leadsTarget': "{names} leads with {score} · {left} to go to {target}",
     'game.editHint': "Tip: tap a row to change it.",

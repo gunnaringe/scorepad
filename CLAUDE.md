@@ -137,11 +137,26 @@ don't reuse its names, D1 database or rate-limit namespace (`1001`).
   Kos (`cozy`) a waffle-grid texture, snow and `public/themes/cozy.svg`
   (a steaming mug of hot chocolate) on the home screen and the big screen.
 - **Sticky table:** `.table-scroll` is the only scroller in the game view
-  (`#view` is a 100dvh flex column), so `thead`/`tfoot`/first column stick
-  inside it in both directions. Sticky cells need opaque backgrounds.
+  (`#view` is a 100dvh flex column), so the `thead` and first column stick
+  inside it in both directions. The whole `thead` is sticky (not its cells):
+  it holds the names and, right under them, the Σ row (`.sum-row`: total,
+  rank badge, gap to the leader). Sticky cells need opaque backgrounds.
+  `ranked(sum)` hides ranks and the leader highlight before the first round
+  and while everyone is level; the `.gap` line is always rendered so the
+  header never changes height.
 - **Service worker:** network-first for everything (it's several modules, and
   a stale mix after a deploy would break). Bump `CACHE` only when the
-  precache list changes; add new modules to `PRECACHE`.
+  precache list changes; add new modules to `PRECACHE`. Navigations are
+  cached under `/` (the app), except the static pages in `PAGES`.
+- **Privacy page:** `public/privacy.html` (`/privacy`), static, nb + en,
+  linked from settings. Keep it true when adding storage or a request: it
+  promises no cookies, analytics or third-party requests. Settings has
+  "delete all data" (`store.clearAll()`: every `scorepad-*` key), so new
+  localStorage keys must start with `scorepad-`.
+- **Security headers:** `public/_headers` sets a strict same-origin CSP
+  (`script-src 'self'`: no inline scripts, which is why the pre-paint theme
+  code is `public/theme.js`), `Referrer-Policy: no-referrer` and friends.
+  A violation shows up as a console error in the smoke test.
 
 ## Testing
 
@@ -156,6 +171,8 @@ don't reuse its names, D1 database or rate-limit namespace (`1001`).
 ## Deploy
 
 Cloudflare Worker `scorepad` (never rename it: the custom domains are bound to
-it), Workers Builds on push to `main`. Agent sessions can't deploy by hand
+it), Workers Builds on push to `main`; other branches run `wrangler preview`
+(beta), which needs the `previews` block in `wrangler.jsonc`: give any new
+binding a Preview-safe copy there (own rate-limit namespace, never 2001). Agent sessions can't deploy by hand
 (Cloudflare credentials there are read-only). Free plan: SQLite-backed Durable
 Objects only, which this uses.

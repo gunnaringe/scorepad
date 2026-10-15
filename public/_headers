@@ -1,0 +1,8 @@
+# Security headers for every static response (the /api/ Worker sets its own).
+# Everything is same-origin, so the CSP can be strict; style-src needs
+# 'unsafe-inline' for the style="--w:…" custom properties the app writes.
+/*
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'
+  Referrer-Policy: no-referrer
+  X-Content-Type-Options: nosniff
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()

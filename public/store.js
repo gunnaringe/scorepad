@@ -84,6 +84,14 @@ export function deviceLabel(ua = navigator.userAgent) {
   return browser ? `${os} · ${browser}` : os;
 }
 
+// --- Everything ----------------------------------------------------------------
+
+// Every key this app writes starts with "scorepad-": sessions, settings,
+// recent players, device id, hints, the round-sheet draft.
+export function clearAll() {
+  for (const key of Object.keys(localStorage)) if (key.startsWith('scorepad-')) localStorage.removeItem(key);
+}
+
 // --- Session records ---------------------------------------------------------
 
 export function listSessions() {

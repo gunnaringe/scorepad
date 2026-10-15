@@ -18,7 +18,7 @@ const mk = async (opts = {}) => {
 };
 const addPlayers = async (p, names) => { for (const n of names) { await p.fill('#pname', n); await p.press('#pname', 'Enter'); } };
 
-// A) Free mode, 8 players, 20 rounds: sticky header/footer/first column.
+// A) Free mode, 8 players, 20 rounds: sticky header (names + totals) and first column.
 {
   const { p } = await mk();
   await p.goto(`${BASE}/`);
@@ -38,10 +38,30 @@ const addPlayers = async (p, names) => { for (const n of names) { await p.fill('
   const r = await p.evaluate(() => {
     const box = (s) => document.querySelector(s).getBoundingClientRect();
     const scr = box('#gt');
-    return { scroller: [scr.top, scr.bottom, scr.left], head: box('thead th:nth-child(3)').top, foot: box('tfoot td').bottom, rn: box('tbody tr:nth-child(10) .rn').left, scrollTop: document.querySelector('#gt').scrollTop, scrollLeft: document.querySelector('#gt').scrollLeft };
+    return { scroller: [scr.top, scr.bottom, scr.left], head: box('thead th:nth-child(3)').top, headBottom: box('thead tr:first-child th:nth-child(3)').bottom, sum: box('thead .sum-row td').top, gap: document.querySelector('thead .sum-row td:nth-child(3) .gap').textContent, rn: box('tbody tr:nth-child(10) .rn').left, scrollTop: document.querySelector('#gt').scrollTop, scrollLeft: document.querySelector('#gt').scrollLeft };
   });
   console.log('sticky', JSON.stringify(r));
   await p.screenshot({ path: '/tmp/shots/free-scrolled.png' });
+}
+
+// D) Privacy page (and the CSP: a violation shows up as a console error), and
+// "delete all data" in settings.
+{
+  const { p } = await mk();
+  await p.goto(`${BASE}/privacy`);
+  console.log('privacy', await p.textContent('h1'));
+  await p.screenshot({ path: '/tmp/shots/privacy.png', fullPage: true });
+  await p.goto(`${BASE}/`);
+  await p.click('#new-game');
+  await addPlayers(p, ['Kari', 'Ola']);
+  await p.click('#start');
+  await p.goto(`${BASE}/#/`);
+  await p.click('.hero [data-act="settings"]');
+  await p.screenshot({ path: '/tmp/shots/settings.png' });
+  await p.click('#clear-all');
+  await Promise.all([p.waitForURL(`${BASE}/`), p.click('#ask button[value="yes"]')]);
+  const left = await p.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith('scorepad-') && k !== 'scorepad-device-v1'));
+  console.log('cleared', JSON.stringify(left));
 }
 
 // B) Amerikaner contract + tricks.
