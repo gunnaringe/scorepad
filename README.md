@@ -42,3 +42,12 @@ together.
 Cloudflare Worker `scorepad` with static assets and one SQLite-backed Durable
 Object per shared session. Workers Builds deploys on push to `main`. Fits in
 the Workers free plan.
+
+## Licence
+
+[Apache 2.0](LICENSE), except:
+
+- QR codes by [Project Nayuki's QR Code generator](https://www.nayuki.io/page/qr-code-generator-library)
+  (MIT), in `vendor/qrcodegen.ts`.
+- The self-hosted Fredoka font in `public/fonts/`, under the
+  [SIL Open Font License](public/fonts/OFL.txt).
